@@ -32,6 +32,8 @@ import {
   getIndexesWithinAncestors,
   getContentBlockSource,
   elementComponent,
+  customSlotComponent,
+  getCustomSlotContentRootId,
 } from "@webstudio-is/sdk";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
 import {
@@ -345,6 +347,27 @@ const DroppableComponentStub = forwardRef<
   );
 });
 DroppableComponentStub.displayName = "DroppableComponentStub";
+
+const CustomSlotComponentStub = forwardRef<
+  HTMLDivElement,
+  { children?: ReactNode }
+>((props, ref) => <div {...props} ref={ref} />);
+CustomSlotComponentStub.displayName = "CustomSlotComponentStub";
+
+const getRenderableChildren = (
+  instance: Instance,
+  instanceSelector: InstanceSelector,
+  instances: Instances
+) => {
+  const rootId = getCustomSlotContentRootId(instances, instance.id);
+  const root = rootId === undefined ? undefined : instances.get(rootId);
+  return root === undefined
+    ? { children: instance.children, instanceSelector }
+    : {
+        children: root.children,
+        instanceSelector: [root.id, ...instanceSelector],
+      };
+};
 
 // this utility is temporary solution to compute instance selectors
 // for rich text subtree which cannot have slots so its safe to traverse ancestors
@@ -725,12 +748,17 @@ const WebstudioComponentCanvasInner = forwardRef<
 
   const { [showAttribute]: show = true, ...instanceProps } =
     useInstanceProps(instanceSelector);
+  const renderable = getRenderableChildren(
+    instance,
+    instanceSelector,
+    instances
+  );
   const children =
     getTextContent(instanceProps) ??
     createInstanceChildrenElements({
       instances,
-      instanceSelector,
-      children: instance.children,
+      instanceSelector: renderable.instanceSelector,
+      children: renderable.children,
       Component: WebstudioComponentCanvas,
       components,
     });
@@ -805,6 +833,10 @@ const WebstudioComponentCanvasInner = forwardRef<
 
   if (instance.component === descendantComponent) {
     return <></>;
+  }
+
+  if (instance.component === customSlotComponent) {
+    Component = CustomSlotComponentStub as AnyComponent;
   }
 
   if (instance.component === blockComponent) {
@@ -1026,6 +1058,11 @@ const WebstudioComponentPreviewInner = forwardRef<
   const { isSafeMode } = useContext(ReactSdkContext);
   const { [showAttribute]: show = true, ...instanceProps } =
     useInstanceProps(instanceSelector);
+  const renderable = getRenderableChildren(
+    instance,
+    instanceSelector,
+    instances
+  );
   const props: {
     [componentAttribute]: string;
     [idAttribute]: string;
@@ -1097,6 +1134,10 @@ const WebstudioComponentPreviewInner = forwardRef<
     Component = Block;
   }
 
+  if (instance.component === customSlotComponent) {
+    Component = CustomSlotComponentStub as AnyComponent;
+  }
+
   if (instance.component === blockBodyComponent) {
     Component = BlockBody;
   }
@@ -1117,8 +1158,8 @@ const WebstudioComponentPreviewInner = forwardRef<
         getTextContent(instanceProps) ??
           createInstanceChildrenElements({
             instances,
-            instanceSelector,
-            children: instance.children,
+            instanceSelector: renderable.instanceSelector,
+            children: renderable.children,
             Component: WebstudioComponentPreview,
             components,
           })

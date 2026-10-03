@@ -11,6 +11,10 @@ import {
   blockComponent,
   contentBlockDocumentProp,
   collectionComponent,
+  customSlotComponent,
+  customSlotComponentVariable,
+  customSlotSchemaVariable,
+  customSlotValuesVariable,
 } from "@webstudio-is/sdk";
 import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
 import {
@@ -66,6 +70,139 @@ const getIdValuePair = <T extends { id: string }>(item: T) =>
 
 const toMap = <T extends { id: string }>(list: T[]) =>
   new Map(list.map(getIdValuePair));
+
+test("Custom Slot fields remain local when shared content changes", async () => {
+  const componentIdentifier = encodeDataSourceVariable("component-parameter");
+  const instances = toMap<Instance>([
+    {
+      id: "body",
+      type: "instance",
+      component: "Body",
+      children: [
+        { type: "id", value: "card-a" },
+        { type: "id", value: "card-b" },
+      ],
+    },
+    {
+      id: "card-a",
+      type: "instance",
+      component: customSlotComponent,
+      children: [{ type: "id", value: "fragment" }],
+    },
+    {
+      id: "card-b",
+      type: "instance",
+      component: customSlotComponent,
+      children: [{ type: "id", value: "fragment" }],
+    },
+    {
+      id: "fragment",
+      type: "instance",
+      component: "Fragment",
+      children: [{ type: "id", value: "heading" }],
+    },
+    {
+      id: "heading",
+      type: "instance",
+      component: "Text",
+      children: [
+        { type: "expression", value: `${componentIdentifier}.heading` },
+      ],
+    },
+  ]);
+  $instances.set(instances);
+  const dataSources = toMap<DataSource>([
+    {
+      id: "component-parameter",
+      type: "parameter",
+      name: customSlotComponentVariable,
+      scopeInstanceId: "fragment",
+    },
+    {
+      id: "schema",
+      type: "variable",
+      name: customSlotSchemaVariable,
+      scopeInstanceId: "fragment",
+      value: {
+        type: "json",
+        value: [{ id: "heading-id", name: "heading" }],
+      },
+    },
+    ...(["Alpha", "Beta"] as const).map((heading, index) => ({
+      id: `values-${index}`,
+      type: "variable" as const,
+      name: customSlotValuesVariable,
+      scopeInstanceId: index === 0 ? "card-a" : "card-b",
+      value: {
+        type: "json" as const,
+        value: { "heading-id": { type: "literal", value: heading } },
+      },
+    })),
+  ]);
+  $dataSources.set(dataSources);
+  selectPageRoot("body");
+  await vi.waitFor(() => {
+    const values = $propValuesByInstanceSelector.get();
+    expect(
+      values
+        .get(getInstanceKey(["heading", "fragment", "card-a", "body"]))
+        ?.get(textContentAttribute)
+    ).toBe("Alpha");
+    expect(
+      values
+        .get(getInstanceKey(["heading", "fragment", "card-b", "body"]))
+        ?.get(textContentAttribute)
+    ).toBe("Beta");
+  });
+  instances
+    .get("fragment")!
+    .children.unshift({ type: "id", value: "category" });
+  instances.set("category", {
+    id: "category",
+    type: "instance",
+    component: "Text",
+    children: [
+      { type: "expression", value: `${componentIdentifier}.category` },
+    ],
+  });
+  $instances.set(new Map(instances));
+  dataSources.set("schema", {
+    id: "schema",
+    type: "variable",
+    name: customSlotSchemaVariable,
+    scopeInstanceId: "fragment",
+    value: {
+      type: "json",
+      value: [
+        { id: "heading-id", name: "heading" },
+        {
+          id: "category-id",
+          name: "category",
+          defaultValue: { type: "literal", value: "Featured" },
+        },
+      ],
+    },
+  });
+  $dataSources.set(new Map(dataSources));
+  await vi.waitFor(() => {
+    const values = $propValuesByInstanceSelector.get();
+    for (const [slotId, heading] of [
+      ["card-a", "Alpha"],
+      ["card-b", "Beta"],
+    ]) {
+      expect(
+        values
+          .get(getInstanceKey(["heading", "fragment", slotId, "body"]))
+          ?.get(textContentAttribute)
+      ).toBe(heading);
+      expect(
+        values
+          .get(getInstanceKey(["category", "fragment", slotId, "body"]))
+          ?.get(textContentAttribute)
+      ).toBe("Featured");
+    }
+  });
+});
 
 const setBoxInstance = (id: Instance["id"]) => {
   $instances.set(

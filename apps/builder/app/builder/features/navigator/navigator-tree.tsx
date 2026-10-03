@@ -38,6 +38,7 @@ import {
   rootComponent,
   blockTemplateComponent,
   descendantComponent,
+  isPortalLikeComponent,
   type Instance,
 } from "@webstudio-is/sdk";
 import { animationCanPlayOnCanvasProperty } from "@webstudio-is/sdk/runtime";
@@ -369,7 +370,8 @@ export const $flatTree = computed(
       const isHidden =
         isParentHidden ||
         false === Boolean(propValues?.get(showAttribute) ?? true);
-      const isReusable = isParentReusable || instance.component === "Slot";
+      const isReusable =
+        isParentReusable || isPortalLikeComponent(instance.component);
       const treeItem: TreeItem = {
         selector,
         visibleAncestors,
