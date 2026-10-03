@@ -22,6 +22,14 @@ import {
   descendantComponent,
   getIndexesWithinAncestors,
   elementComponent,
+  customSlotComponent,
+  customSlotComponentVariable,
+  customSlotSchemaVariable,
+  customSlotValuesVariable,
+  findCustomSlotDataSource,
+  getCustomSlotContentRootId,
+  parseCustomSlotFields,
+  parseCustomSlotFieldValues,
 } from "@webstudio-is/sdk";
 import { transpileExpression } from "@webstudio-is/expression";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
@@ -364,6 +372,8 @@ export const generateJsxElement = ({
     instance.component === blockBodyComponent
   ) {
     generatedElement += children;
+  } else if (instance.component === customSlotComponent) {
+    generatedElement += `<div${generatedProps}>\n${children}</div>\n`;
   } else {
     let componentVariable;
     if (instance.component === elementComponent) {
@@ -481,6 +491,90 @@ export const generateJsxChildren = ({
       const instanceId = child.value;
       const instance = instances.get(instanceId);
       if (instance === undefined) {
+        continue;
+      }
+      if (instance.component === customSlotComponent) {
+        const rootId = getCustomSlotContentRootId(instances, instanceId);
+        if (rootId === undefined) {
+          continue;
+        }
+        const root = instances.get(rootId);
+        if (root === undefined) {
+          continue;
+        }
+        const schema = findCustomSlotDataSource(
+          dataSources,
+          rootId,
+          customSlotSchemaVariable
+        );
+        const values = findCustomSlotDataSource(
+          dataSources,
+          instanceId,
+          customSlotValuesVariable
+        );
+        const component = findCustomSlotDataSource(
+          dataSources,
+          rootId,
+          customSlotComponentVariable
+        );
+        if (component?.type !== "parameter") {
+          continue;
+        }
+        const fields = parseCustomSlotFields(
+          schema?.type === "variable" && schema.value.type === "json"
+            ? schema.value.value
+            : undefined
+        );
+        const localValues = parseCustomSlotFieldValues(
+          values?.type === "variable" && values.value.type === "json"
+            ? values.value.value
+            : undefined
+        );
+        const componentName = scope.getName(component.id, component.name);
+        const objectEntries = fields.map((field) => {
+          const value = localValues[field.id] ?? field.defaultValue;
+          const expression =
+            value?.type === "expression"
+              ? generateExpression({
+                  expression: value.value,
+                  dataSources,
+                  usedDataSources,
+                  scope,
+                })
+              : (JSON.stringify(value?.value) ?? "undefined");
+          return `${JSON.stringify(field.name)}: ${expression}`;
+        });
+        const sharedChildren = generateJsxChildren({
+          scope,
+          metas,
+          tagsOverrides,
+          children: root.children,
+          instances,
+          props,
+          resources,
+          dataSources,
+          usedDataSources,
+          indexesWithinAncestors,
+          classesMap,
+          excludePlaceholders,
+          publishedContentBlocks,
+          contentBodyOverride,
+        });
+        const boundChildren = `{((${componentName}: any) => <Fragment>\n${sharedChildren}</Fragment>)({${objectEntries.join(", ")}})}\n`;
+        generatedChildren += generateJsxElement({
+          context: "jsx",
+          scope,
+          metas,
+          tagsOverrides,
+          instance,
+          props,
+          resources,
+          dataSources,
+          usedDataSources,
+          indexesWithinAncestors,
+          classesMap,
+          children: boundChildren,
+        });
         continue;
       }
       const publishedContent = publishedContentBlocks?.get(instance.id);
