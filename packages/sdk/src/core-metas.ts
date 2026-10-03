@@ -4,6 +4,7 @@ import {
   PaintBrushIcon,
   SettingsIcon,
   AddTemplateInstanceIcon,
+  SlotComponentIcon,
 } from "@webstudio-is/icons/svg";
 import { html } from "./__generated__/normalize.css";
 import * as normalize from "./__generated__/normalize.css";
@@ -12,6 +13,7 @@ import type { Instance } from "./schema/instances";
 import { tagProperty } from "./runtime";
 import { tags } from "./__generated__/tags";
 import { contentBlockSourceProp } from "./schema/content-block";
+import { customSlotComponent } from "./custom-slot";
 
 export const rootComponent = "ws:root";
 
@@ -41,6 +43,18 @@ const elementMeta: WsComponentMeta = {
 };
 
 export const portalComponent = "Slot";
+
+export const isPortalLikeComponent = (component: Instance["component"]) =>
+  component === portalComponent || component === customSlotComponent;
+
+const customSlotMeta: WsComponentMeta = {
+  label: "Custom Slot",
+  icon: SlotComponentIcon,
+  contentModel: {
+    category: "instance",
+    children: ["instance"],
+  },
+};
 
 export const collectionComponent = "ws:collection";
 
@@ -164,6 +178,7 @@ export const coreMetas = {
   [rootComponent]: rootMeta,
   [elementComponent]: elementMeta,
   [collectionComponent]: collectionMeta,
+  [customSlotComponent]: customSlotMeta,
   [descendantComponent]: descendantMeta,
   [blockComponent]: blockMeta,
   [blockBodyComponent]: blockBodyMeta,
@@ -176,6 +191,7 @@ export const isCoreComponent = (component: Instance["component"]) =>
   component === rootComponent ||
   component === elementComponent ||
   component === collectionComponent ||
+  component === customSlotComponent ||
   component === descendantComponent ||
   component === blockComponent ||
   component === blockBodyComponent ||

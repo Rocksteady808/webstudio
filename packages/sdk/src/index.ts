@@ -23,6 +23,8 @@ export * from "./asset-folder-hierarchy";
 export * from "./asset-folder-normalization";
 export * from "./asset-resource-config";
 export * from "./core-metas";
+export * from "./custom-slot-fields";
+export * from "./custom-slot";
 export * from "./content-block";
 export * from "./code-text";
 export * from "./instances-utils";
