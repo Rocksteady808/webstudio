@@ -376,7 +376,11 @@ export const generateJsxElement = ({
     generatedElement += children;
   } else if (instance.component === customSlotComponent) {
     const tag = getCustomSlotTag(instance.tag);
-    generatedElement += `<${tag}${generatedProps}>\n${children}</${tag}>\n`;
+    // without a tag the copy adds no box, keeping the page structure
+    generatedElement +=
+      tag === undefined
+        ? `<div${generatedProps} style={{ display: "contents" }}>\n${children}</div>\n`
+        : `<${tag}${generatedProps}>\n${children}</${tag}>\n`;
   } else {
     let componentVariable;
     if (instance.component === elementComponent) {

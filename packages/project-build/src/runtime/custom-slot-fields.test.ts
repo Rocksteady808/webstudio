@@ -11,6 +11,7 @@ import {
   getCustomSlotVariantState,
   getStyleDeclKey,
   parseCustomSlotFields,
+  type Instance,
   type WebstudioData,
 } from "@webstudio-is/sdk";
 import { applyBuilderPatchTransactions } from "../state/patch";
@@ -22,6 +23,7 @@ import { styleUpdateInput } from "./styles";
 import {
   createCustomSlotField,
   deleteCustomSlotField,
+  findBrokenCustomSlotReferences,
   findCustomSlotConnection,
   getCustomSlotProperties,
   getCustomSlotVariantStates,
@@ -286,7 +288,7 @@ test("renaming a property keeps connected settings working", () => {
   ]);
 });
 
-test("deleting a property detaches settings and clears copy values", () => {
+test("deleting a property keeps copy values and reports connected settings", () => {
   const cards = createCards();
   let state = cards.state;
   const link = createCustomSlotField(
@@ -332,14 +334,23 @@ test("deleting a property detaches settings and clears copy values", () => {
   expect(getFields(state, cards.fragmentId).map((field) => field.name)).toEqual(
     []
   );
-  expect(state.props?.get("href")).toEqual({
-    id: "href",
-    instanceId: "button",
-    name: "href",
-    type: "string",
-    value: "https://flexflow.com/",
+  // the setting keeps pointing at the property and shows an error
+  expect(state.props?.get("href")).toMatchObject({
+    type: "expression",
+    value: `${cards.componentRef}.link`,
   });
-  expect(getValues(state, cards.first)).toEqual({});
+  expect(
+    findBrokenCustomSlotReferences({
+      instances: state.instances ?? new Map(),
+      props: state.props ?? new Map(),
+      dataSources: state.dataSources ?? new Map(),
+      fragmentId: cards.fragmentId,
+    })
+  ).toEqual([{ instanceId: "button", propName: "href", name: "link" }]);
+  // copies keep their values
+  expect(getValues(state, cards.first)).toEqual({
+    [link.result.fieldId]: { type: "literal", value: "https://one.com" },
+  });
 });
 
 test("reads properties for a selected copy and connections for elements", () => {
@@ -434,32 +445,6 @@ test("stores link properties with page values", () => {
       type: "page",
       value: { pageId: "about", instanceId: "faq" },
     },
-  });
-
-  // deleting a page link property keeps the button linked to the page
-  state = {
-    ...state,
-    props: new Map(state.props).set("href", {
-      id: "href",
-      instanceId: "button",
-      name: "href",
-      type: "expression",
-      value: `${cards.componentRef}.link`,
-    }),
-  };
-  state = apply(
-    state,
-    deleteCustomSlotField(state, {
-      fragmentId: cards.fragmentId,
-      fieldId: link.result.fieldId,
-    })
-  );
-  expect(state.props?.get("href")).toEqual({
-    id: "href",
-    instanceId: "button",
-    name: "href",
-    type: "page",
-    value: "home",
   });
 });
 
@@ -980,7 +965,7 @@ test("deleting a variant removes its styles and resets copies using it", () => {
   expect(getValues(state, cards.second)).toEqual({});
 });
 
-test("deleting a property clears it from parent copy overrides", () => {
+test("deleting a property keeps parent copy overrides", () => {
   const cards = createCards();
   let state: BuilderState = { ...cards.state, styles: new Map() };
   const label = createCustomSlotField(
@@ -1013,5 +998,149 @@ test("deleting a property clears it from parent copy overrides", () => {
     })
   );
   const overrides = state.dataSources?.get("parent-overrides");
-  expect(overrides?.type === "variable" && overrides.value.value).toEqual({});
+  expect(overrides?.type === "variable" && overrides.value.value).toEqual({
+    [cards.second]: {
+      [label.result.fieldId]: { type: "literal", value: "Buy" },
+    },
+  });
+});
+
+test("defaults are fixed values and names cannot reuse a component variable", () => {
+  const cards = createCards();
+  let state = cards.state;
+  expect(() =>
+    createCustomSlotField(
+      state,
+      {
+        fragmentId: cards.fragmentId,
+        name: "title",
+        defaultValue: { type: "expression", value: "1 + 1" },
+      },
+      cards.context
+    )
+  ).toThrow("A default must be a fixed value");
+  state = { ...state, dataSources: new Map(state.dataSources) };
+  state.dataSources?.set("count", {
+    type: "variable",
+    id: "count",
+    scopeInstanceId: "button",
+    name: "count",
+    value: { type: "number", value: 0 },
+  });
+  expect(() =>
+    createCustomSlotField(
+      state,
+      { fragmentId: cards.fragmentId, name: "count" },
+      cards.context
+    )
+  ).toThrow('A variable inside this component is already named "count"');
+});
+
+test("changing a type or removing a choice keeps copy values", () => {
+  const cards = createCards();
+  let state: BuilderState = { ...cards.state, styles: new Map() };
+  const size = createCustomSlotField(
+    state,
+    {
+      fragmentId: cards.fragmentId,
+      name: "size",
+      type: "choice",
+      choices: ["small", "large"],
+      defaultValue: { type: "literal", value: "small" },
+    },
+    cards.context
+  );
+  state = apply(state, size);
+  state = apply(
+    state,
+    setCustomSlotFieldValue(
+      state,
+      {
+        slotId: cards.first,
+        fieldId: size.result.fieldId,
+        value: { type: "literal", value: "large" },
+      },
+      cards.context
+    )
+  );
+  state = apply(
+    state,
+    updateCustomSlotField(state, {
+      fragmentId: cards.fragmentId,
+      fieldId: size.result.fieldId,
+      choices: ["small"],
+    })
+  );
+  expect(getFields(state, cards.fragmentId)[0]).toMatchObject({
+    type: "choice",
+    choices: ["small"],
+  });
+  expect(getValues(state, cards.first)).toEqual({
+    [size.result.fieldId]: { type: "literal", value: "large" },
+  });
+  state = apply(
+    state,
+    updateCustomSlotField(state, {
+      fragmentId: cards.fragmentId,
+      fieldId: size.result.fieldId,
+      type: "number",
+    })
+  );
+  expect(getValues(state, cards.first)).toEqual({
+    [size.result.fieldId]: { type: "literal", value: "large" },
+  });
+});
+
+test("renaming a property updates nested copies filled from it", () => {
+  const cards = createCards();
+  let state = cards.state;
+  const title = createCustomSlotField(
+    state,
+    { fragmentId: cards.fragmentId, name: "title" },
+    cards.context
+  );
+  state = apply(state, title);
+  // a nested copy inside the component filling its label from the title
+  state = {
+    ...state,
+    instances: new Map(state.instances),
+    dataSources: new Map(state.dataSources),
+  };
+  state.instances?.set("nested", {
+    type: "instance",
+    id: "nested",
+    component: "ws:customSlot",
+    children: [],
+  });
+  state.instances?.set("button", {
+    ...(state.instances?.get("button") as Instance),
+    children: [{ type: "id", value: "nested" }],
+  });
+  state.dataSources?.set("nested-values", {
+    type: "variable",
+    id: "nested-values",
+    scopeInstanceId: "nested",
+    name: customSlotValuesVariable,
+    value: {
+      type: "json",
+      value: {
+        label: { type: "expression", value: `${cards.componentRef}.title` },
+      },
+    },
+  });
+  state = apply(
+    state,
+    updateCustomSlotField(
+      { ...state, styles: new Map() },
+      {
+        fragmentId: cards.fragmentId,
+        fieldId: title.result.fieldId,
+        name: "heading",
+      }
+    )
+  );
+  const nested = state.dataSources?.get("nested-values");
+  expect(nested?.type === "variable" && nested.value.value).toEqual({
+    label: { type: "expression", value: `${cards.componentRef}.heading` },
+  });
 });

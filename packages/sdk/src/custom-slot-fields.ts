@@ -26,16 +26,30 @@ export type CustomSlotFieldValue =
   | { type: "asset"; value: string };
 
 /**
- * Text, link, HTML, boolean and image values live in the component value.
- * A variant picks which variant styles apply to a copy.
+ * Text, number, link, HTML, boolean, image, JSON and choice values live in
+ * the component value. A variant picks which variant styles apply to a copy.
  */
 export type CustomSlotFieldType =
   | "text"
+  | "number"
   | "link"
   | "html"
   | "boolean"
   | "image"
+  | "json"
+  | "choice"
   | "variant";
+
+const valueFieldTypes = new Set<string>([
+  "text",
+  "number",
+  "link",
+  "html",
+  "boolean",
+  "image",
+  "json",
+  "choice",
+]);
 
 /** One choice of a variant property, e.g. Small in Size: Small / Large. */
 export type CustomSlotVariantOption = { id: string; name: string };
@@ -48,6 +62,9 @@ export type CustomSlotField = {
   options?: CustomSlotVariantOption[];
   /** display name of the design a copy has without a variant, e.g. Primary */
   baseName?: string;
+  /** values of a choice property; each value is also its label */
+  choices?: string[];
+  /** a property without a default is required */
   defaultValue?: CustomSlotFieldValue;
 };
 
@@ -115,6 +132,17 @@ const parseVariantOptions = (value: unknown): CustomSlotVariantOption[] => {
   return options;
 };
 
+const parseChoices = (value: unknown) =>
+  Array.isArray(value)
+    ? Array.from(
+        new Set(
+          value.filter(
+            (item): item is string => typeof item === "string" && item !== ""
+          )
+        )
+      )
+    : [];
+
 export const parseCustomSlotFields = (value: unknown): CustomSlotField[] => {
   if (Array.isArray(value) === false) {
     return [];
@@ -135,14 +163,11 @@ export const parseCustomSlotFields = (value: unknown): CustomSlotField[] => {
       continue;
     }
     const field: CustomSlotField = { id: item.id, name: item.name };
-    if (
-      item.type === "text" ||
-      item.type === "link" ||
-      item.type === "html" ||
-      item.type === "boolean" ||
-      item.type === "image"
-    ) {
-      field.type = item.type;
+    if (typeof item.type === "string" && valueFieldTypes.has(item.type)) {
+      field.type = item.type as CustomSlotFieldType;
+    }
+    if (item.type === "choice") {
+      field.choices = parseChoices(item.choices);
     }
     if (item.type === "variant") {
       field.type = "variant";
@@ -211,6 +236,90 @@ export const resolveCustomSlotFields = async ({
     entries.push([field.name, resolved]);
   }
   return Object.fromEntries(entries);
+};
+
+export type CustomSlotFieldIssue = {
+  type: "missing" | "type" | "choice";
+  message: string;
+};
+
+const isJsonContainer = (value: unknown) =>
+  typeof value === "object" && value !== null;
+
+const matchesFieldType = (
+  type: CustomSlotFieldType,
+  value: CustomSlotFieldValue
+) => {
+  if (value.type === "page") {
+    return type === "link";
+  }
+  if (value.type === "asset") {
+    return type === "image";
+  }
+  if (value.type !== "literal") {
+    return true;
+  }
+  switch (type) {
+    case "number":
+      return typeof value.value === "number" && Number.isFinite(value.value);
+    case "boolean":
+      return typeof value.value === "boolean";
+    case "json":
+      return isJsonContainer(value.value);
+    default:
+      return typeof value.value === "string";
+  }
+};
+
+const fieldTypeLabels: Record<CustomSlotFieldType, string> = {
+  text: "text",
+  number: "a number",
+  link: "a link",
+  html: "HTML",
+  boolean: "true or false",
+  image: "an image",
+  json: "an object or array",
+  choice: "one of the choices",
+  variant: "a variant",
+};
+
+/**
+ * Why a copy's value cannot be used, if it cannot. Values are never removed
+ * when a property changes; they stay and show this error until fixed.
+ * Expressions are checked when they run, not here.
+ */
+export const getCustomSlotFieldIssue = (
+  field: CustomSlotField,
+  localValue: undefined | CustomSlotFieldValue
+): undefined | CustomSlotFieldIssue => {
+  if (field.type === "variant") {
+    return;
+  }
+  const value = localValue ?? field.defaultValue;
+  if (
+    value === undefined ||
+    (value.type === "literal" &&
+      (value.value === undefined || value.value === null))
+  ) {
+    return { type: "missing", message: "Required. Enter a value." };
+  }
+  const type = field.type ?? "text";
+  if (matchesFieldType(type, value) === false) {
+    return {
+      type: "type",
+      message: `Must be ${fieldTypeLabels[type]}. Enter a new value.`,
+    };
+  }
+  if (
+    type === "choice" &&
+    value.type === "literal" &&
+    field.choices?.includes(value.value as string) !== true
+  ) {
+    return {
+      type: "choice",
+      message: `"${String(value.value)}" is no longer a choice. Pick another one.`,
+    };
+  }
 };
 
 /** Builds the same href a regular Link builds for a page or page section. */
@@ -530,8 +639,7 @@ export const getCustomSlotCopy = ({
       ),
       slotId,
       enclosingCopyIds,
-      getOverrides: (copyId) =>
-        getCustomSlotCopyOverrides(dataSources, copyId),
+      getOverrides: (copyId) => getCustomSlotCopyOverrides(dataSources, copyId),
     }),
   };
 };

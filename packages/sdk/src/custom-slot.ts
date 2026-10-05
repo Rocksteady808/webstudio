@@ -8,8 +8,9 @@ export const customSlotComponentVariable = "component";
 
 /**
  * Tags a copy can render as, so it can be the list item, article or section
- * itself instead of adding a wrapper div. Written into generated code, so
- * only known tags are allowed.
+ * itself. Without a tag a copy adds no element, so turning elements into a
+ * component keeps the page structure. Written into generated code, so only
+ * known tags are allowed.
  */
 export const customSlotTags = [
   "div",
@@ -27,8 +28,18 @@ export const customSlotTags = [
 
 export type CustomSlotTag = (typeof customSlotTags)[number];
 
-export const getCustomSlotTag = (tag: undefined | string): CustomSlotTag =>
-  customSlotTags.find((item) => item === tag) ?? "div";
+/** undefined when the copy renders no element of its own */
+export const getCustomSlotTag = (
+  tag: undefined | string
+): undefined | CustomSlotTag => customSlotTags.find((item) => item === tag);
+
+export const defaultComponentName = "Component";
+
+/** A component's name is the label of its shared Fragment. */
+export const getComponentName = (
+  instances: Instances,
+  fragmentId: undefined | Instance["id"]
+) => instances.get(fragmentId ?? "")?.label || defaultComponentName;
 
 /** A Custom Slot occurrence points at one shared Fragment root. */
 export const getCustomSlotContentRootId = (

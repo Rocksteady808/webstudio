@@ -350,13 +350,21 @@ const DroppableComponentStub = forwardRef<
 });
 DroppableComponentStub.displayName = "DroppableComponentStub";
 
-// renders a Custom Slot copy as its chosen tag, div by default
+// renders a component copy as its chosen tag; without one the copy adds no
+// box, like a Slot, so the page keeps the structure it had
 const CustomSlotComponentStub = forwardRef<
   HTMLElement,
   { children?: ReactNode; [tagProperty]?: string }
->(({ [tagProperty]: tag, ...props }, ref) =>
-  createElement(getCustomSlotTag(tag), { ...props, ref })
-);
+>(({ [tagProperty]: tag, ...props }, ref) => {
+  const customSlotTag = getCustomSlotTag(tag);
+  return customSlotTag === undefined
+    ? createElement("div", {
+        ...props,
+        ref,
+        style: { display: "contents" },
+      })
+    : createElement(customSlotTag, { ...props, ref });
+});
 CustomSlotComponentStub.displayName = "CustomSlotComponentStub";
 
 const getRenderableChildren = (

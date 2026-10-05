@@ -1,4 +1,6 @@
+import { isFeatureEnabled } from "@webstudio-is/feature-flags";
 import {
+  createComponentFromSelection,
   unwrapInstance,
   deleteSelectedInstance,
   reparentInstance,
@@ -1146,6 +1148,31 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       },
     },
 
+    {
+      name: "createComponent",
+      label: "Create component",
+      description: "Turn the selected element into a reusable component",
+      category: "Navigator",
+      defaultHotkeys: ["meta+alt+k", "ctrl+alt+k"],
+      hidden: isFeatureEnabled("customSlot") === false,
+      handler: () => {
+        if (isFeatureEnabled("customSlot") === false) {
+          return;
+        }
+        if (
+          guardDesignModeCommand({
+            isDesignMode: $isDesignMode.get(),
+            message: "Creating components is only allowed in design mode.",
+          }) === false
+        ) {
+          return;
+        }
+        if (hasMultiInstanceSelection()) {
+          return;
+        }
+        createComponentFromSelection();
+      },
+    },
     {
       name: "pasteTailwind",
       label: "Paste HTML with Tailwind classes",

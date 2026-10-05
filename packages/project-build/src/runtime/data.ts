@@ -1,6 +1,7 @@
 import {
   type Asset,
   collectionComponent,
+  customSlotComponent,
   dataSourceVariableValue,
   decodeDataVariableId,
   decodeDataSourceVariable,
@@ -596,7 +597,11 @@ export const computeExpressionWithinScope = async (
 const getParentInstanceById = (instances: Instances) => {
   const parentInstanceById = new Map<Instance["id"], Instance["id"]>();
   for (const instance of instances.values()) {
-    if (instance.component === "Slot") {
+    // Slots and component copies start an isolated scope
+    if (
+      instance.component === "Slot" ||
+      instance.component === customSlotComponent
+    ) {
       continue;
     }
     for (const child of instance.children ?? []) {
@@ -759,7 +764,7 @@ export const bindExpressionToInstanceScope = ({
   return boundExpression;
 };
 
-const traverseExpressions = ({
+export const traverseExpressions = ({
   startingInstanceId,
   pages,
   instances,

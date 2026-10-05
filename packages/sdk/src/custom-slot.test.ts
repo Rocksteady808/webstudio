@@ -73,11 +73,11 @@ test("looks up many copies without rescanning every data source", () => {
   expect(reads).toBeLessThanOrEqual(2);
 });
 
-test("a copy renders as its chosen tag, or div", () => {
-  expect(getCustomSlotTag(undefined)).toBe("div");
+test("a copy renders as its chosen tag, or adds no element", () => {
+  expect(getCustomSlotTag(undefined)).toBeUndefined();
   expect(getCustomSlotTag("li")).toBe("li");
   expect(getCustomSlotTag("article")).toBe("article");
-  // anything outside the allowed tags falls back to div
-  expect(getCustomSlotTag("script")).toBe("div");
-  expect(getCustomSlotTag('div onclick="x"')).toBe("div");
+  // anything outside the allowed tags renders no element of its own
+  expect(getCustomSlotTag("script")).toBeUndefined();
+  expect(getCustomSlotTag('div onclick="x"')).toBeUndefined();
 });

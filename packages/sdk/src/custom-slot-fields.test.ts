@@ -13,6 +13,7 @@ import {
   getCustomSlotVariantState,
   splitCustomSlotVariantState,
   parseCustomSlotFields,
+  getCustomSlotFieldIssue,
   parseCustomSlotFieldValues,
   resolveCustomSlotFields,
   resolveCustomSlotPageValues,
@@ -731,4 +732,54 @@ test("splits a variant's hover into the variant and the state", () => {
   ).toEqual("");
   expect(splitCustomSlotVariantState(":hover")).toBeUndefined();
   expect(splitCustomSlotVariantState(undefined)).toBeUndefined();
+});
+
+test("reports missing, mismatched and removed choice values", () => {
+  const text = { id: "a", name: "title", type: "text" as const };
+  expect(getCustomSlotFieldIssue(text, undefined)?.type).toEqual("missing");
+  expect(
+    getCustomSlotFieldIssue(
+      { ...text, defaultValue: { type: "literal", value: "Hi" } },
+      undefined
+    )
+  ).toBeUndefined();
+  expect(
+    getCustomSlotFieldIssue(
+      { id: "b", name: "count", type: "number" },
+      { type: "literal", value: "large" }
+    )?.type
+  ).toEqual("type");
+  expect(
+    getCustomSlotFieldIssue(
+      { id: "c", name: "size", type: "choice", choices: ["small"] },
+      { type: "literal", value: "large" }
+    )?.type
+  ).toEqual("choice");
+  expect(
+    getCustomSlotFieldIssue(
+      { id: "d", name: "items", type: "json" },
+      { type: "literal", value: [1, 2] }
+    )
+  ).toBeUndefined();
+  // expressions are checked when they run
+  expect(
+    getCustomSlotFieldIssue(
+      { id: "e", name: "count", type: "number" },
+      { type: "expression", value: "$ws$dataSource$x" }
+    )
+  ).toBeUndefined();
+});
+
+test("parses number, JSON and choice properties", () => {
+  expect(
+    parseCustomSlotFields([
+      { id: "a", name: "count", type: "number" },
+      { id: "b", name: "items", type: "json" },
+      { id: "c", name: "size", type: "choice", choices: ["s", "s", "", "l"] },
+    ])
+  ).toEqual([
+    { id: "a", name: "count", type: "number" },
+    { id: "b", name: "items", type: "json" },
+    { id: "c", name: "size", type: "choice", choices: ["s", "l"] },
+  ]);
 });

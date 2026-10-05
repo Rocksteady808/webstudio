@@ -137,6 +137,32 @@ export const convertInstance = (component: string, tag?: string) => {
   }
 };
 
+/**
+ * Turns the selected element into a component, like Figma's Create
+ * component: it becomes the shared source and a copy takes its place.
+ */
+export const createComponentFromSelection = () => {
+  const instancePath = $selectedInstancePath.get();
+  // global root or body are selected
+  if (instancePath === undefined || instancePath.length === 1) {
+    return;
+  }
+  try {
+    const [selectedItem] = instancePath;
+    const result = executeRuntimeMutation({
+      id: "customSlots.createComponent",
+      input: { instanceSelector: selectedItem.instanceSelector },
+    });
+    if (result !== undefined) {
+      selectInstance(result.result.instanceSelector);
+    }
+  } catch (error) {
+    toast.error(
+      error instanceof Error ? error.message : "Cannot create component"
+    );
+  }
+};
+
 export const unwrapInstance = () => {
   const instancePath = $selectedInstancePath.get();
   if (instancePath === undefined || !canUnwrapInstance(instancePath)) {

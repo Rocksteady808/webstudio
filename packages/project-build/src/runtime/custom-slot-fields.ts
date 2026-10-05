@@ -17,9 +17,9 @@ import {
   parseCustomSlotFields,
   type CustomSlotField,
   type CustomSlotFieldValue,
+  type CustomSlotFieldValues,
   type DataSource,
   type Instance,
-  type Prop,
   type WebstudioData,
 } from "@webstudio-is/sdk";
 import type { BuilderState } from "../state/builder-state";
@@ -89,12 +89,19 @@ const fieldValueInput = z.union([
 
 const fieldTypeInput = z.enum([
   "text",
+  "number",
   "link",
   "html",
   "boolean",
   "image",
+  "json",
+  "choice",
   "variant",
 ]);
+
+const choicesInput = z
+  .array(z.string().min(1))
+  .describe("Values of a choice property; each value is also its label");
 
 const variantOptionsInput = z
   .array(
@@ -140,7 +147,7 @@ const getRequiredState = <
   return state as Pick<WebstudioData, Namespace>;
 };
 
-const getSchemaDataSource = (
+export const getCustomSlotSchemaDataSource = (
   data: CustomSlotFieldData,
   fragmentId: Instance["id"]
 ) => {
@@ -167,12 +174,67 @@ const getSchemaDataSource = (
   return { schema, component };
 };
 
-const readFields = (schema: DataSource) =>
+export const readCustomSlotFields = (schema: DataSource) =>
   parseCustomSlotFields(
     schema.type === "variable" && schema.value.type === "json"
       ? schema.value.value
       : undefined
   );
+
+/** Defaults are fixed values; data and expressions belong to each copy. */
+const requireLiteralDefault = (
+  defaultValue: undefined | null | CustomSlotFieldValue
+) => {
+  if (defaultValue?.type === "expression") {
+    return throwBuilderRuntimeError(
+      "BAD_REQUEST",
+      "A default must be a fixed value. Connect data on each copy instead."
+    );
+  }
+};
+
+/**
+ * Names of variables created inside the component. Properties are read as
+ * `component.<name>`, but sharing a name with a variable is confusing.
+ */
+const getComponentVariableNames = (
+  data: CustomSlotFieldData,
+  fragmentId: Instance["id"]
+) => {
+  const instanceIds = findTreeInstanceIds(data.instances, fragmentId);
+  const names = new Set<string>();
+  for (const dataSource of data.dataSources.values()) {
+    if (
+      dataSource.scopeInstanceId !== undefined &&
+      instanceIds.has(dataSource.scopeInstanceId) &&
+      dataSource.type !== "parameter" &&
+      isCustomSlotInternalVariable(dataSource) === false
+    ) {
+      names.add(dataSource.name);
+    }
+  }
+  return names;
+};
+
+export const requireUniqueCustomSlotFieldName = (
+  data: CustomSlotFieldData,
+  fragmentId: Instance["id"],
+  fields: readonly CustomSlotField[],
+  name: string
+) => {
+  if (fields.some((field) => field.name === name)) {
+    return throwBuilderRuntimeError(
+      "CONFLICT",
+      `Property "${name}" already exists`
+    );
+  }
+  if (getComponentVariableNames(data, fragmentId).has(name)) {
+    return throwBuilderRuntimeError(
+      "CONFLICT",
+      `A variable inside this component is already named "${name}"`
+    );
+  }
+};
 
 /** HTML Embed values get the same check as an HTML Embed's Code. */
 const requireValidFieldValue = (
@@ -192,7 +254,7 @@ const requireValidFieldValue = (
   }
 };
 
-const writeFields = (
+export const writeCustomSlotFields = (
   data: CustomSlotFieldData,
   schema: DataSource,
   fields: CustomSlotField[]
@@ -206,13 +268,15 @@ const writeFields = (
   });
 };
 
-const getFieldReference = (componentId: DataSource["id"], name: string) =>
-  `${encodeDataVariableId(componentId)}.${name}`;
+export const getCustomSlotFieldReference = (
+  componentId: DataSource["id"],
+  name: string
+) => `${encodeDataVariableId(componentId)}.${name}`;
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const listCustomSlotOccurrenceIds = (
+export const listCustomSlotOccurrenceIds = (
   data: CustomSlotFieldData,
   fragmentId: Instance["id"]
 ) => {
@@ -319,13 +383,7 @@ const removeVariantOptionsMutable = (
 const updateFragmentExpressionsMutable = (
   data: CustomSlotFieldData,
   fragmentId: Instance["id"],
-  update: {
-    expression: (expression: string) => string;
-    prop?: (prop: Extract<Prop, { type: "expression" }>) => Prop | undefined;
-    child?: (
-      child: Extract<Instance["children"][number], { type: "expression" }>
-    ) => Instance["children"][number] | undefined;
-  }
+  update: { expression: (expression: string) => string }
 ) => {
   const instanceIds = findTreeInstanceIds(data.instances, fragmentId);
   for (const instanceId of instanceIds) {
@@ -337,12 +395,7 @@ const updateFragmentExpressionsMutable = (
       if (child.type !== "expression") {
         return child;
       }
-      return (
-        update.child?.(child) ?? {
-          ...child,
-          value: update.expression(child.value),
-        }
-      );
+      return { ...child, value: update.expression(child.value) };
     });
   }
   for (const prop of data.props.values()) {
@@ -350,13 +403,10 @@ const updateFragmentExpressionsMutable = (
       continue;
     }
     if (prop.type === "expression") {
-      data.props.set(
-        prop.id,
-        update.prop?.(prop) ?? {
-          ...prop,
-          value: update.expression(prop.value),
-        }
-      );
+      data.props.set(prop.id, {
+        ...prop,
+        value: update.expression(prop.value),
+      });
     }
     if (prop.type === "action") {
       data.props.set(prop.id, {
@@ -368,24 +418,51 @@ const updateFragmentExpressionsMutable = (
       });
     }
   }
-};
-
-const toLiteralProp = (
-  prop: Extract<Prop, { type: "expression" }>,
-  value: unknown
-): Prop => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { type, value: expression, ...base } = prop;
-  if (typeof value === "number") {
-    return { ...base, type: "number", value };
+  // nested copies inside the component may fill their values from it
+  const updateValues = (values: CustomSlotFieldValues) => {
+    let changed = false;
+    for (const [id, value] of Object.entries(values)) {
+      if (value.type === "expression") {
+        const next = update.expression(value.value);
+        if (next !== value.value) {
+          values[id] = { type: "expression", value: next };
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  };
+  for (const dataSource of data.dataSources.values()) {
+    if (
+      dataSource.type !== "variable" ||
+      dataSource.value.type !== "json" ||
+      instanceIds.has(dataSource.scopeInstanceId ?? "") === false
+    ) {
+      continue;
+    }
+    if (dataSource.name === customSlotValuesVariable) {
+      const values = parseCustomSlotFieldValues(dataSource.value.value);
+      if (updateValues(values)) {
+        data.dataSources.set(dataSource.id, {
+          ...dataSource,
+          value: { type: "json", value: values },
+        });
+      }
+    }
+    if (dataSource.name === customSlotOverridesVariable) {
+      const overrides = parseCustomSlotOverrides(dataSource.value.value);
+      let changed = false;
+      for (const values of Object.values(overrides)) {
+        changed = updateValues(values) || changed;
+      }
+      if (changed) {
+        data.dataSources.set(dataSource.id, {
+          ...dataSource,
+          value: { type: "json", value: overrides },
+        });
+      }
+    }
   }
-  if (typeof value === "boolean") {
-    return { ...base, type: "boolean", value };
-  }
-  if (typeof value === "string") {
-    return { ...base, type: "string", value };
-  }
-  return { ...base, type: "json", value: value ?? null };
 };
 
 export const createCustomSlotFieldInput = z.object({
@@ -402,7 +479,10 @@ export const createCustomSlotFieldInput = z.object({
     .string()
     .optional()
     .describe("Name of the design without a variant; empty resets to Base"),
-  defaultValue: fieldValueInput.optional(),
+  choices: choicesInput.optional(),
+  defaultValue: fieldValueInput
+    .optional()
+    .describe("Fixed default value. A property without a default is required"),
 });
 
 export const createCustomSlotField = (
@@ -414,15 +494,19 @@ export const createCustomSlotField = (
   const fieldId = input.fieldId ?? context.createId();
   let componentId = "";
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getSchemaDataSource(draft, input.fragmentId);
+    const { schema, component } = getCustomSlotSchemaDataSource(
+      draft,
+      input.fragmentId
+    );
     componentId = component.id;
-    const fields = readFields(schema);
-    if (fields.some((field) => field.name === input.name)) {
-      return throwBuilderRuntimeError(
-        "CONFLICT",
-        `Property "${input.name}" already exists`
-      );
-    }
+    const fields = readCustomSlotFields(schema);
+    requireUniqueCustomSlotFieldName(
+      draft,
+      input.fragmentId,
+      fields,
+      input.name
+    );
+    requireLiteralDefault(input.defaultValue as CustomSlotFieldValue);
     const field: CustomSlotField = { id: fieldId, name: input.name };
     if (input.type !== undefined) {
       field.type = input.type;
@@ -434,17 +518,20 @@ export const createCustomSlotField = (
         field.baseName = baseName;
       }
     }
+    if (input.type === "choice") {
+      field.choices = input.choices ?? [];
+    }
     if (input.defaultValue !== undefined) {
       field.defaultValue = input.defaultValue as CustomSlotFieldValue;
     }
     requireValidFieldValue(field, field.defaultValue);
-    writeFields(draft, schema, [...fields, field]);
+    writeCustomSlotFields(draft, schema, [...fields, field]);
   });
   return createRuntimeMutation({
     payload,
     result: {
       fieldId,
-      expression: getFieldReference(componentId, input.name),
+      expression: getCustomSlotFieldReference(componentId, input.name),
     },
     invalidatesNamespaces: customSlotFieldNamespaces,
   });
@@ -460,7 +547,11 @@ export const updateCustomSlotFieldInput = z.object({
     .string()
     .optional()
     .describe("Name of the design without a variant; empty resets to Base"),
-  defaultValue: fieldValueInput.nullable().optional(),
+  choices: choicesInput.optional(),
+  defaultValue: fieldValueInput
+    .nullable()
+    .optional()
+    .describe("Fixed default value; null removes it and makes it required"),
 });
 
 export const updateCustomSlotField = (
@@ -469,35 +560,47 @@ export const updateCustomSlotField = (
 ) => {
   const before = getRequiredState(state, customSlotSchemaNamespaces);
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getSchemaDataSource(draft, input.fragmentId);
-    const fields = readFields(schema);
+    const { schema, component } = getCustomSlotSchemaDataSource(
+      draft,
+      input.fragmentId
+    );
+    const fields = readCustomSlotFields(schema);
     const field = fields.find((field) => field.id === input.fieldId);
     if (field === undefined) {
       return throwBuilderRuntimeError("NOT_FOUND", "Property not found");
     }
     const nextField: CustomSlotField = { ...field };
+    requireLiteralDefault(input.defaultValue as CustomSlotFieldValue);
     if (input.name !== undefined && input.name !== field.name) {
-      if (fields.some((item) => item.name === input.name)) {
-        return throwBuilderRuntimeError(
-          "CONFLICT",
-          `Property "${input.name}" already exists`
-        );
-      }
+      requireUniqueCustomSlotFieldName(
+        draft,
+        input.fragmentId,
+        fields,
+        input.name
+      );
       nextField.name = input.name;
       // keep connected settings working after rename
       const pattern = new RegExp(
         `${escapeRegExp(
-          getFieldReference(component.id, field.name)
+          getCustomSlotFieldReference(component.id, field.name)
         )}(?![\\w$])`,
         "g"
       );
-      const replacement = getFieldReference(component.id, input.name);
+      const replacement = getCustomSlotFieldReference(component.id, input.name);
       updateFragmentExpressionsMutable(draft, input.fragmentId, {
         expression: (expression) => expression.replace(pattern, replacement),
       });
     }
+    // changing the type keeps every copy's value; mismatches show an error
     if (input.type !== undefined) {
       nextField.type = input.type;
+      if (input.type === "choice") {
+        nextField.choices ??= [];
+      }
+    }
+    // removing a choice keeps the copies using it; they show an error
+    if (input.choices !== undefined) {
+      nextField.choices = input.choices;
     }
     if (input.options !== undefined) {
       nextField.options = input.options;
@@ -527,7 +630,7 @@ export const updateCustomSlotField = (
       nextField.defaultValue = input.defaultValue as CustomSlotFieldValue;
     }
     requireValidFieldValue(nextField, nextField.defaultValue);
-    writeFields(
+    writeCustomSlotFields(
       draft,
       schema,
       fields.map((item) => (item.id === field.id ? nextField : item))
@@ -551,47 +654,29 @@ export const deleteCustomSlotField = (
 ) => {
   const before = getRequiredState(state, customSlotSchemaNamespaces);
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getSchemaDataSource(draft, input.fragmentId);
-    const fields = readFields(schema);
+    const { schema } = getCustomSlotSchemaDataSource(draft, input.fragmentId);
+    const fields = readCustomSlotFields(schema);
     const field = fields.find((field) => field.id === input.fieldId);
     if (field === undefined) {
       return throwBuilderRuntimeError("NOT_FOUND", "Property not found");
     }
-    // detach connected settings and keep the default, like Figma detaching
-    const reference = getFieldReference(component.id, field.name);
-    const fallback =
-      field.defaultValue?.type === "literal"
-        ? field.defaultValue.value
-        : undefined;
-    updateFragmentExpressionsMutable(draft, input.fragmentId, {
-      expression: (expression) => expression,
-      prop: (prop) => {
-        if (prop.value.trim() !== reference) {
-          return;
-        }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { type, value, ...base } = prop;
-        return field.defaultValue?.type === "page"
-          ? { ...base, type: "page", value: field.defaultValue.value }
-          : toLiteralProp(prop, fallback);
-      },
-      child: (child) =>
-        child.value.trim() === reference
-          ? { type: "text", value: String(fallback ?? "") }
-          : undefined,
-    });
-    writeFields(
+    writeCustomSlotFields(
       draft,
       schema,
       fields.filter((item) => item.id !== field.id)
     );
-    removeVariantOptionsMutable(
-      draft,
-      input.fragmentId,
-      field,
-      new Set((field.options ?? []).map((option) => option.id))
-    );
-    removeCopyValuesMutable(draft, input.fragmentId, field.id);
+    if (field.type === "variant") {
+      // variant styles and picks have no use without the variant
+      removeVariantOptionsMutable(
+        draft,
+        input.fragmentId,
+        field,
+        new Set((field.options ?? []).map((option) => option.id))
+      );
+      removeCopyValuesMutable(draft, input.fragmentId, field.id);
+    }
+    // copies keep their values and connected settings keep pointing at the
+    // property, showing an error until they are connected to another one
   });
   return createRuntimeMutation({
     payload,
@@ -638,7 +723,9 @@ export const setCustomSlotFieldValue = (
     requireValidFieldValue(
       schema === undefined
         ? undefined
-        : readFields(schema).find((field) => field.id === input.fieldId),
+        : readCustomSlotFields(schema).find(
+            (field) => field.id === input.fieldId
+          ),
       input.value as null | CustomSlotFieldValue
     );
     if (input.override !== undefined) {
@@ -743,7 +830,7 @@ export const getCustomSlotProperties = ({
   );
   return {
     fragmentId,
-    properties: (schema === undefined ? [] : readFields(schema)).map(
+    properties: (schema === undefined ? [] : readCustomSlotFields(schema)).map(
       (field): CustomSlotProperty => ({
         field,
         localValue: localValues[field.id],
@@ -789,8 +876,9 @@ export const findCustomSlotConnection = ({
     }
     return {
       fragmentId: component.scopeInstanceId,
-      fields: readFields(schema),
-      getExpression: (name: string) => getFieldReference(component.id, name),
+      fields: readCustomSlotFields(schema),
+      getExpression: (name: string) =>
+        getCustomSlotFieldReference(component.id, name),
     };
   }
 };
@@ -850,13 +938,14 @@ export const getCustomSlotVariantStates = ({
     copy.fragmentId,
     customSlotSchemaVariable
   );
-  return (schema === undefined ? [] : readFields(schema)).flatMap((field) =>
-    field.type === "variant"
-      ? (field.options ?? []).map((option) => ({
-          label: `${toPropertyLabel(field.name)}: ${option.name}`,
-          selector: getCustomSlotVariantState(option.id),
-        }))
-      : []
+  return (schema === undefined ? [] : readCustomSlotFields(schema)).flatMap(
+    (field) =>
+      field.type === "variant"
+        ? (field.options ?? []).map((option) => ({
+            label: `${toPropertyLabel(field.name)}: ${option.name}`,
+            selector: getCustomSlotVariantState(option.id),
+          }))
+        : []
   );
 };
 
@@ -895,4 +984,81 @@ export const getCustomSlotActiveVariantState = ({
       return getCustomSlotVariantState(option.id);
     }
   }
+};
+
+export type BrokenCustomSlotReference = {
+  instanceId: Instance["id"];
+  /** setting name, or undefined for text content */
+  propName?: string;
+  /** the missing property */
+  name: string;
+};
+
+/**
+ * Settings inside a component still connected to a property that was deleted
+ * or renamed elsewhere. They stay visible as errors until connected to
+ * another property or removed.
+ */
+export const findBrokenCustomSlotReferences = ({
+  instances,
+  props,
+  dataSources,
+  fragmentId,
+}: Pick<WebstudioData, "instances" | "props" | "dataSources"> & {
+  fragmentId: Instance["id"];
+}): BrokenCustomSlotReference[] => {
+  const component = findCustomSlotDataSource(
+    dataSources,
+    fragmentId,
+    customSlotComponentVariable
+  );
+  const schema = findCustomSlotDataSource(
+    dataSources,
+    fragmentId,
+    customSlotSchemaVariable
+  );
+  if (component === undefined || schema === undefined) {
+    return [];
+  }
+  const names = new Set(
+    readCustomSlotFields(schema).map((field) => field.name)
+  );
+  const pattern = new RegExp(
+    `${escapeRegExp(encodeDataVariableId(component.id))}\\.([A-Za-z_$][\\w$]*)`,
+    "g"
+  );
+  const broken: BrokenCustomSlotReference[] = [];
+  const check = (
+    expression: string,
+    instanceId: Instance["id"],
+    propName?: string
+  ) => {
+    for (const [, name] of expression.matchAll(pattern)) {
+      if (names.has(name) === false) {
+        broken.push({ instanceId, propName, name });
+      }
+    }
+  };
+  const instanceIds = findTreeInstanceIds(instances, fragmentId);
+  for (const instanceId of instanceIds) {
+    for (const child of instances.get(instanceId)?.children ?? []) {
+      if (child.type === "expression") {
+        check(child.value, instanceId);
+      }
+    }
+  }
+  for (const prop of props.values()) {
+    if (instanceIds.has(prop.instanceId) === false) {
+      continue;
+    }
+    if (prop.type === "expression") {
+      check(prop.value, prop.instanceId, prop.name);
+    }
+    if (prop.type === "action") {
+      for (const action of prop.value) {
+        check(action.code, prop.instanceId, prop.name);
+      }
+    }
+  }
+  return broken;
 };

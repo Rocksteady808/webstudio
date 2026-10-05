@@ -63938,6 +63938,119 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
+    id: "customSlots.createComponent",
+    command: "create-component",
+    client: "createComponentFromInstance",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instanceSelector: {
+          minItems: 2,
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          description:
+            "Leaf-to-root path of the element to turn into a component. The first id is the element, the second its direct parent.",
+        },
+        name: {
+          description: "Component name; made unique automatically",
+          type: "string",
+          minLength: 1,
+        },
+      },
+      required: ["instanceSelector"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        instanceSelector: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        fragmentId: {
+          type: "string",
+        },
+        name: {
+          type: "string",
+        },
+      },
+      required: ["instanceSelector", "fragmentId", "name"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources", "resources"],
+    writeNamespaces: ["instances", "props", "dataSources", "resources"],
+    invalidatesNamespaces: ["instances", "props", "dataSources", "resources"],
+    retryOnConflict: false,
+  },
+  {
+    id: "customSlots.exposeProperties",
+    command: "expose-component-properties",
+    client: "exposeComponentProperties",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fragmentId: {
+          type: "string",
+          minLength: 1,
+        },
+        instanceId: {
+          type: "string",
+          minLength: 1,
+          description: "Element inside the component",
+        },
+        properties: {
+          minItems: 1,
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              propName: {
+                type: "string",
+                minLength: 1,
+                description:
+                  'Setting to expose; "data-ws-text-content" for the text content',
+              },
+              name: {
+                type: "string",
+                pattern: "^[A-Za-z_$][\\w$]*$",
+              },
+              type: {
+                description: "Property type when the setting has no value yet",
+                type: "string",
+                enum: ["text", "number", "boolean", "link", "image", "json"],
+              },
+            },
+            required: ["propName", "name"],
+          },
+        },
+      },
+      required: ["fragmentId", "instanceId", "properties"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        fieldIds: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+      },
+      required: ["fieldIds"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources"],
+    writeNamespaces: ["instances", "props", "dataSources"],
+    invalidatesNamespaces: ["instances", "props", "dataSources"],
+    retryOnConflict: false,
+  },
+  {
     id: "customSlots.createField",
     command: "create-custom-slot-field",
     client: "createCustomSlotField",
@@ -63961,7 +64074,17 @@ export const runtimeOperationContractData = [
         },
         type: {
           type: "string",
-          enum: ["text", "link", "html", "boolean", "image", "variant"],
+          enum: [
+            "text",
+            "number",
+            "link",
+            "html",
+            "boolean",
+            "image",
+            "json",
+            "choice",
+            "variant",
+          ],
         },
         options: {
           type: "array",
@@ -63986,7 +64109,18 @@ export const runtimeOperationContractData = [
             "Name of the design without a variant; empty resets to Base",
           type: "string",
         },
+        choices: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          description:
+            "Values of a choice property; each value is also its label",
+        },
         defaultValue: {
+          description:
+            "Fixed default value. A property without a default is required",
           anyOf: [
             {
               type: "object",
@@ -64100,7 +64234,17 @@ export const runtimeOperationContractData = [
         },
         type: {
           type: "string",
-          enum: ["text", "link", "html", "boolean", "image", "variant"],
+          enum: [
+            "text",
+            "number",
+            "link",
+            "html",
+            "boolean",
+            "image",
+            "json",
+            "choice",
+            "variant",
+          ],
         },
         options: {
           type: "array",
@@ -64125,7 +64269,18 @@ export const runtimeOperationContractData = [
             "Name of the design without a variant; empty resets to Base",
           type: "string",
         },
+        choices: {
+          type: "array",
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+          description:
+            "Values of a choice property; each value is also its label",
+        },
         defaultValue: {
+          description:
+            "Fixed default value; null removes it and makes it required",
           anyOf: [
             {
               anyOf: [

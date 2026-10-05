@@ -52,6 +52,7 @@ import {
 } from "~/shared/nano-states";
 import { renderControl } from "../controls/combined";
 import { usePropsLogic, type PropAndMeta } from "./use-props-logic";
+import { ExposeComponentProperties } from "../expose-component-properties";
 import { AnimationSection } from "./animation/animation-section";
 import { $matchingBreakpoints } from "../../style-panel/shared/model";
 import { matchMediaBreakpoints } from "./match-media-breakpoints";
@@ -426,6 +427,13 @@ export const PropsSection = (props: PropsSectionProps) => {
           </Box>
         ))}
       </Grid>
+
+      <ExposeComponentProperties
+        instanceId={props.instanceId}
+        systemProps={logic.systemProps}
+        initialProps={logic.initialProps}
+        addedProps={logic.addedProps}
+      />
 
       <Separator />
       {showPropertiesSection && (

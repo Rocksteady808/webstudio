@@ -40,6 +40,8 @@ import * as runtimeUi from "./runtime-ui";
 import * as projectSearch from "./project-search";
 import * as slot from "./slot";
 import * as customSlotFields from "./custom-slot-fields";
+import * as customSlotCreate from "./custom-slot-create";
+import * as customSlotExpose from "./custom-slot-expose";
 import * as designTokenImport from "./design-token-import";
 import * as audit from "./audit";
 import * as styles from "./styles";
@@ -1350,6 +1352,28 @@ export const builderRuntimeOperations = [
     }),
     slot.extractSharedSlotInput,
     ({ state, input, context }) => slot.extractSharedSlot(state, input, context)
+  ),
+  runtimeOperation(
+    "customSlots.createComponent",
+    api("create-component", "createComponentFromInstance"),
+    mutationContract({
+      readNamespaces: [...customSlotCreate.createComponentNamespaces],
+      writeNamespaces: [...customSlotCreate.createComponentNamespaces],
+    }),
+    customSlotCreate.createComponentFromInstanceInput,
+    ({ state, input, context }) =>
+      customSlotCreate.createComponentFromInstance(state, input, context)
+  ),
+  runtimeOperation(
+    "customSlots.exposeProperties",
+    api("expose-component-properties", "exposeComponentProperties"),
+    mutationContract({
+      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+    }),
+    customSlotExpose.exposeCustomSlotPropertiesInput,
+    ({ state, input, context }) =>
+      customSlotExpose.exposeCustomSlotProperties(state, input, context)
   ),
   runtimeOperation(
     "customSlots.createField",

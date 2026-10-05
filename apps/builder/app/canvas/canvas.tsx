@@ -8,7 +8,6 @@ import {
 } from "react";
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useStore } from "@nanostores/react";
-import { isFeatureEnabled } from "@webstudio-is/feature-flags";
 import { type Instances, toRuntimeAsset } from "@webstudio-is/sdk";
 import { createAssetUrlsByPath } from "@webstudio-is/project-build/runtime";
 import type { Components } from "@webstudio-is/react-sdk";
@@ -35,7 +34,6 @@ import {
 } from "./features/webstudio-component";
 import {
   registerComponentLibrary,
-  registerCustomSlotTemplate,
   $registeredComponents,
   subscribeComponentHooks,
   subscribeResourceRequestPlan,
@@ -268,9 +266,6 @@ export const Canvas = () => {
   useMount(() => {
     for (const library of canvasComponentLibraries) {
       registerComponentLibrary(library);
-    }
-    if (isFeatureEnabled("customSlot")) {
-      registerCustomSlotTemplate();
     }
   });
 

@@ -2453,6 +2453,8 @@ describe("builder runtime registry", () => {
       ["instances.insertFragment", { parentInstanceId: "body" }],
       ["slots.attach", {}],
       ["slots.extract", {}],
+      ["customSlots.createComponent", {}],
+      ["customSlots.exposeProperties", {}],
       ["customSlots.createField", {}],
       ["customSlots.updateField", {}],
       ["customSlots.deleteField", {}],

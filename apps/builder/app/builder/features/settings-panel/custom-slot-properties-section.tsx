@@ -29,6 +29,8 @@ import {
   createId,
   customSlotComponent,
   customSlotTags,
+  getComponentName,
+  getCustomSlotFieldIssue,
   getCustomSlotTag,
   getCustomSlotCopyOverrides,
   getCustomSlotEnclosingCopies,
@@ -39,6 +41,7 @@ import {
 } from "@webstudio-is/sdk";
 import {
   getContentModeEditableInstanceIds,
+  findBrokenCustomSlotReferences,
   getCustomSlotProperties,
   isCustomSlotFieldContentEditable,
   validateHtmlEmbedCode,
@@ -50,7 +53,7 @@ import {
   $selectedInstance,
   $selectedInstanceSelector,
 } from "~/shared/nano-states";
-import { $dataSources, $instances } from "~/shared/sync/data-stores";
+import { $dataSources, $instances, $props } from "~/shared/sync/data-stores";
 import {
   executeRuntimeMutation,
   executeRuntimeMutationSequence,
@@ -218,13 +221,31 @@ const describeTakenName = (takenNames: readonly string[]) => (name: string) =>
 
 const propertyTypes = new Map<CustomSlotFieldType, string>([
   ["text", "Text"],
-  ["link", "Link"],
-  ["html", "HTML Embed"],
+  ["number", "Number"],
   ["boolean", "Boolean"],
+  ["choice", "Choice"],
   ["image", "Image"],
+  ["link", "Link"],
+  ["json", "JSON"],
+  ["html", "HTML Embed"],
 ]);
 
-type NewProperty = { name: string; type: CustomSlotFieldType };
+type NewProperty = {
+  name: string;
+  type: CustomSlotFieldType;
+  choices: string[];
+};
+
+/** "small, large" into ["small", "large"]; each value is also its label */
+const parseChoicesInput = (value: string) =>
+  Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
 
 const AddPropertyForm = ({
   takenNames,
@@ -236,6 +257,7 @@ const AddPropertyForm = ({
   onCancel: () => void;
 }) => {
   const [type, setType] = useState<CustomSlotFieldType>("text");
+  const [choices, setChoices] = useState("");
   return (
     <Flex direction="column" gap="1">
       <Select
@@ -244,15 +266,51 @@ const AddPropertyForm = ({
         value={type}
         onChange={setType}
       />
+      {type === "choice" && (
+        <InputField
+          placeholder="Choices, e.g. small, large"
+          value={choices}
+          onChange={(event) => setChoices(event.target.value)}
+        />
+      )}
       <PropertyNameForm
         submitLabel="Add"
         placeholder="Property name, e.g. Link"
         describe={describeTakenName(takenNames)}
         onCancel={onCancel}
-        onSubmit={(name) => onSubmit({ name, type })}
+        onSubmit={(name) =>
+          onSubmit({ name, type, choices: parseChoicesInput(choices) })
+        }
       />
     </Flex>
   );
+};
+
+/**
+ * The fixed default a new property starts with. A property without a default
+ * is required: every copy has to fill it in.
+ */
+const getInitialDefault = (
+  property: NewProperty
+): undefined | CustomSlotFieldValue => {
+  switch (property.type) {
+    // images start empty instead of an invalid "" source
+    case "image":
+      return;
+    // booleans start on, so a connected Show keeps the element visible
+    case "boolean":
+      return { type: "literal", value: true };
+    case "number":
+      return { type: "literal", value: 0 };
+    case "json":
+      return { type: "literal", value: {} };
+    case "choice":
+      return property.choices.length === 0
+        ? undefined
+        : { type: "literal", value: property.choices[0] };
+    default:
+      return { type: "literal", value: "" };
+  }
 };
 
 const createProperty = ({
@@ -268,15 +326,8 @@ const createProperty = ({
       fragmentId,
       name: property.name,
       type: property.type,
-      // booleans start on, so a connected Show keeps the element visible;
-      // images start empty instead of an invalid "" source
-      defaultValue:
-        property.type === "image"
-          ? undefined
-          : {
-              type: "literal",
-              value: property.type === "boolean" ? true : "",
-            },
+      choices: property.type === "choice" ? property.choices : undefined,
+      defaultValue: getInitialDefault(property),
     },
   });
 };
@@ -838,6 +889,224 @@ const LinkValueControl = ({
   );
 };
 
+/** Number property: a number field, or bound to a variable with the dot. */
+const NumberValueControl = ({
+  slotId,
+  property,
+}: {
+  slotId: string;
+  property: CustomSlotProperty;
+}) => {
+  const { field, localValue } = property;
+  const { binding, boundValue } = useTextBinding(localValue);
+  const draft = useDraftValue(
+    localValue?.type === "literal" ? formatValue(localValue.value) : "",
+    (value) => {
+      const number = Number(value);
+      // keep what was typed, so a mistake shows an error instead of vanishing
+      setValue(slotId, field.id, {
+        type: "literal",
+        value: value.trim() !== "" && Number.isFinite(number) ? number : value,
+      });
+    }
+  );
+  const defaultValue =
+    field.defaultValue?.type === "literal" ? field.defaultValue.value : "";
+  return (
+    <BindableExpressionControl
+      {...binding}
+      value={draft.value}
+      {...getBindingHandlers(slotId, field.id)}
+      renderControl={({ readOnly }) => (
+        <InputField
+          inputMode="decimal"
+          disabled={readOnly}
+          placeholder={formatValue(defaultValue)}
+          value={readOnly ? formatValue(boundValue) : draft.value}
+          onChange={(event) => draft.set(event.target.value)}
+          onBlur={draft.save}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              draft.save();
+            }
+          }}
+        />
+      )}
+    />
+  );
+};
+
+const formatJson = (value: unknown) =>
+  value === undefined ? "" : JSON.stringify(value, null, 2);
+
+/** JSON property: an object or array typed as JSON, or bound to data. */
+const JsonValueControl = ({
+  slotId,
+  property,
+}: {
+  slotId: string;
+  property: CustomSlotProperty;
+}) => {
+  const { field, localValue } = property;
+  const [error, setError] = useState<string>();
+  const shownValue = localValue ?? field.defaultValue;
+  const binding = useBindableControl({
+    boundExpression: localValue?.type === "expression" ? localValue : undefined,
+    fallbackExpression:
+      shownValue?.type === "literal" ? JSON.stringify(shownValue.value) : "{}",
+  });
+  const boundValue = useAsyncValue(
+    () =>
+      localValue?.type === "expression"
+        ? evaluateExpressionWithinScope(localValue.value, binding.scope)
+        : Promise.resolve(undefined),
+    [localValue, binding.scope],
+    undefined
+  );
+  const draft = useDraftValue(
+    shownValue?.type === "literal" ? formatJson(shownValue.value) : "",
+    (value) => {
+      try {
+        setValue(slotId, field.id, {
+          type: "literal",
+          value: JSON.parse(value),
+        });
+        setError(undefined);
+      } catch {
+        setError('Enter valid JSON, e.g. {"title": "Hello"}');
+      }
+    }
+  );
+  return (
+    <Flex direction="column" gap="1">
+      <BindableExpressionControl
+        {...binding}
+        value={draft.value}
+        onChangeValue={(value) =>
+          setValue(slotId, field.id, { type: "literal", value })
+        }
+        onChangeExpression={(value) =>
+          setValue(slotId, field.id, { type: "expression", value })
+        }
+        onRemove={(value) =>
+          setValue(slotId, field.id, {
+            type: "literal",
+            value: value ?? {},
+          })
+        }
+        renderControl={({ readOnly }) => (
+          <CodeEditor
+            lang="json"
+            title={
+              <DialogTitle
+                maximizable
+                suffix={
+                  <DialogTitleActions>
+                    <DialogMaximize />
+                    <DialogClose />
+                  </DialogTitleActions>
+                }
+              >
+                <Text variant="labels">{humanizeAttribute(field.name)}</Text>
+              </DialogTitle>
+            }
+            readOnly={readOnly}
+            invalid={error !== undefined}
+            value={readOnly ? formatJson(boundValue) : draft.value}
+            onChange={(value) => {
+              setError(undefined);
+              draft.set(value);
+            }}
+            onChangeComplete={draft.save}
+          />
+        )}
+      />
+      {error !== undefined && <Text color="destructive">{error}</Text>}
+    </Flex>
+  );
+};
+
+/** Choice property: one click picks one of the fixed values. */
+const ChoiceValueControl = ({
+  slotId,
+  property,
+}: {
+  slotId: string;
+  property: CustomSlotProperty;
+}) => {
+  const { field, localValue } = property;
+  const shownValue = localValue ?? field.defaultValue;
+  const current =
+    shownValue?.type === "literal" && typeof shownValue.value === "string"
+      ? shownValue.value
+      : undefined;
+  const choices = field.choices ?? [];
+  // a removed choice stays visible until another one is picked
+  const options =
+    current === undefined || choices.includes(current)
+      ? choices
+      : [current, ...choices];
+  if (options.length === 0) {
+    return <Text color="subtle">Add choices from the property menu.</Text>;
+  }
+  return (
+    <Select
+      options={options}
+      placeholder="Pick a choice"
+      value={current}
+      onChange={(value) =>
+        setValue(slotId, field.id, { type: "literal", value })
+      }
+    />
+  );
+};
+
+const EditChoicesForm = ({
+  field,
+  fragmentId,
+  onClose,
+}: {
+  field: CustomSlotField;
+  fragmentId: string;
+  onClose: () => void;
+}) => {
+  const [value, setValue] = useState((field.choices ?? []).join(", "));
+  const submit = () => {
+    executeRuntimeMutation({
+      id: "customSlots.updateField",
+      input: {
+        fragmentId,
+        fieldId: field.id,
+        choices: parseChoicesInput(value),
+      },
+    });
+    onClose();
+  };
+  return (
+    <Flex gap="1" align="center">
+      <InputField
+        autoFocus
+        css={{ flexGrow: 1 }}
+        placeholder="Choices, e.g. small, large"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            submit();
+          }
+          if (event.key === "Escape") {
+            onClose();
+          }
+        }}
+      />
+      <Button type="button" onClick={submit}>
+        Save
+      </Button>
+      <SmallIconButton aria-label="Cancel" icon={<XIcon />} onClick={onClose} />
+    </Flex>
+  );
+};
+
 const PropertyRow = ({
   slotId,
   fragmentId,
@@ -855,7 +1124,9 @@ const PropertyRow = ({
 }) => {
   const { field, localValue } = property;
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isEditingChoices, setIsEditingChoices] = useState(false);
   const isLink = field.type === "link";
+  const issue = getCustomSlotFieldIssue(field, localValue);
 
   if (isRenaming) {
     return (
@@ -914,6 +1185,11 @@ const PropertyRow = ({
               <DropdownMenuItem onSelect={() => setIsRenaming(true)}>
                 Rename
               </DropdownMenuItem>
+              {field.type === "choice" && (
+                <DropdownMenuItem onSelect={() => setIsEditingChoices(true)}>
+                  Edit choices
+                </DropdownMenuItem>
+              )}
               {Array.from(propertyTypes)
                 .filter(([type]) => type !== (field.type ?? "text"))
                 .map(([type, typeLabel]) => (
@@ -945,6 +1221,22 @@ const PropertyRow = ({
                   Make this the default
                 </DropdownMenuItem>
               )}
+              {field.defaultValue !== undefined && (
+                <DropdownMenuItem
+                  onSelect={() =>
+                    executeRuntimeMutation({
+                      id: "customSlots.updateField",
+                      input: {
+                        fragmentId,
+                        fieldId: field.id,
+                        defaultValue: null,
+                      },
+                    })
+                  }
+                >
+                  Remove default (required)
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 destructive
                 onSelect={() => deleteProperty({ fragmentId, field })}
@@ -955,6 +1247,13 @@ const PropertyRow = ({
           </DropdownMenu>
         )}
       </Flex>
+      {isEditingChoices && (
+        <EditChoicesForm
+          field={field}
+          fragmentId={fragmentId}
+          onClose={() => setIsEditingChoices(false)}
+        />
+      )}
       {isLink ? (
         <LinkValueControl slotId={slotId} property={property} />
       ) : field.type === "image" ? (
@@ -963,16 +1262,27 @@ const PropertyRow = ({
         <BooleanValueControl slotId={slotId} property={property} />
       ) : field.type === "html" ? (
         <HtmlValueControl slotId={slotId} property={property} />
+      ) : field.type === "number" ? (
+        <NumberValueControl slotId={slotId} property={property} />
+      ) : field.type === "json" ? (
+        <JsonValueControl slotId={slotId} property={property} />
+      ) : field.type === "choice" ? (
+        <ChoiceValueControl slotId={slotId} property={property} />
       ) : (
         <TextValueControl slotId={slotId} property={property} />
       )}
+      {issue !== undefined && <Text color="destructive">{issue.message}</Text>}
     </Flex>
   );
 };
 
+// Radix Select cannot use an empty value
+const noTag = "none";
+
 /**
- * The element a copy renders as. Choosing li, article or section lets the copy
- * be that element itself instead of adding a wrapper div.
+ * The element a copy renders as. By default a copy adds no element, so the
+ * page structure stays as it was; li, article or section wrap the copy in
+ * that element.
  */
 const CopyTagSelect = ({ slotId }: { slotId: string }) => {
   const instance = useStore($selectedInstance);
@@ -981,12 +1291,13 @@ const CopyTagSelect = ({ slotId }: { slotId: string }) => {
       <Text variant="titles">Tag</Text>
       <Select
         css={{ width: theme.spacing[22] }}
-        options={[...customSlotTags]}
-        value={getCustomSlotTag(instance?.tag)}
+        options={[noTag, ...customSlotTags]}
+        getLabel={(tag: string) => (tag === noTag ? "None" : tag)}
+        value={getCustomSlotTag(instance?.tag) ?? noTag}
         onChange={(tag) =>
           executeRuntimeMutation({
             id: "instances.setTag",
-            input: { instanceId: slotId, tag },
+            input: { instanceId: slotId, tag: tag === noTag ? "" : tag },
           })
         }
       />
@@ -994,7 +1305,39 @@ const CopyTagSelect = ({ slotId }: { slotId: string }) => {
   );
 };
 
+/** Settings inside the component still connected to deleted properties. */
+const $brokenConnections = computed(
+  [$selectedCustomSlot, $instances, $props, $dataSources],
+  (selected, instances, props, dataSources) =>
+    selected === undefined
+      ? []
+      : findBrokenCustomSlotReferences({
+          instances,
+          props,
+          dataSources,
+          fragmentId: selected.fragmentId,
+        })
+);
+
 const label = "Properties";
+
+const BrokenConnections = () => {
+  const broken = useStore($brokenConnections);
+  if (broken.length === 0) {
+    return;
+  }
+  const names = Array.from(new Set(broken.map(({ name }) => name)));
+  return (
+    <Text color="destructive">
+      {broken.length === 1
+        ? "1 setting inside is"
+        : `${broken.length} settings inside are`}{" "}
+      connected to deleted {names.length === 1 ? "property" : "properties"}{" "}
+      {names.map((name) => humanizeAttribute(name)).join(", ")}. Select it and
+      connect it to another property or remove the connection.
+    </Text>
+  );
+};
 
 /**
  * Properties of the selected Custom Slot copy, like Figma or Webflow component
@@ -1004,6 +1347,7 @@ export const CustomSlotPropertiesSection = () => {
   const selected = useStore($selectedCustomSlot);
   const isContentMode = useStore($isContentMode);
   const isContentEditable = useStore($isSelectedCopyContentEditable);
+  const instances = useStore($instances);
   const [isOpen, setIsOpen] = useOpenState(label);
   const [isAdding, setIsAdding] = useState(false);
   if (
@@ -1045,7 +1389,9 @@ export const CustomSlotPropertiesSection = () => {
             )
           }
         >
-          <SectionTitleLabel>{label}</SectionTitleLabel>
+          <SectionTitleLabel>
+            {getComponentName(instances, selected.fragmentId)} {label}
+          </SectionTitleLabel>
         </SectionTitle>
       }
     >
@@ -1057,6 +1403,7 @@ export const CustomSlotPropertiesSection = () => {
             name to use the shared value again.
           </Text>
         )}
+        {isDesigner && <BrokenConnections />}
         {isDesigner && <CopyTagSelect slotId={slotId} />}
         {(isDesigner || (variant?.field.options?.length ?? 0) > 0) && (
           <VariantSwitcher
@@ -1097,5 +1444,59 @@ export const CustomSlotPropertiesSection = () => {
         )}
       </Flex>
     </CollapsibleSectionRoot>
+  );
+};
+
+/** Broken connections of the selected element inside a component source. */
+const $selectedElementBrokenConnections = computed(
+  [$selectedInstanceSelector, $instances, $props, $dataSources],
+  (instanceSelector, instances, props, dataSources) => {
+    if (instanceSelector === undefined) {
+      return [];
+    }
+    // the closest component the element is shown inside
+    for (let index = 1; index < instanceSelector.length - 1; index += 1) {
+      const fragmentId = instanceSelector[index];
+      if (
+        instances.get(fragmentId)?.component === "Fragment" &&
+        instances.get(instanceSelector[index + 1])?.component ===
+          customSlotComponent
+      ) {
+        return findBrokenCustomSlotReferences({
+          instances,
+          props,
+          dataSources,
+          fragmentId,
+        }).filter(({ instanceId }) => instanceId === instanceSelector[0]);
+      }
+    }
+    return [];
+  }
+);
+
+/**
+ * Shown on an element whose settings are connected to a property that was
+ * deleted, until they are connected to another property or disconnected.
+ */
+export const BrokenPropertyConnectionsBanner = () => {
+  const broken = useStore($selectedElementBrokenConnections);
+  const isContentMode = useStore($isContentMode);
+  if (broken.length === 0 || isContentMode) {
+    return;
+  }
+  return (
+    <Flex
+      direction="column"
+      gap="1"
+      css={{ px: theme.panel.paddingInline, pb: theme.spacing[5] }}
+    >
+      {broken.map(({ propName, name }, index) => (
+        <Text key={index} color="destructive">
+          {propName === undefined ? "Text" : humanizeAttribute(propName)} is
+          connected to deleted property {humanizeAttribute(name)}. Connect it to
+          another property or remove the connection.
+        </Text>
+      ))}
+    </Flex>
   );
 };

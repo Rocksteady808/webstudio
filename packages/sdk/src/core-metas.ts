@@ -48,7 +48,7 @@ export const isPortalLikeComponent = (component: Instance["component"]) =>
   component === portalComponent || component === customSlotComponent;
 
 const customSlotMeta: WsComponentMeta = {
-  label: "Custom Slot",
+  label: "Component",
   icon: SlotComponentIcon,
   contentModel: {
     category: "instance",

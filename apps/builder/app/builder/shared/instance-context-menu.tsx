@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { isFeatureEnabled } from "@webstudio-is/feature-flags";
 import { canUnwrapInstance } from "~/shared/instance-utils/mutation";
 import { useStore } from "@nanostores/react";
 import {
@@ -116,6 +117,7 @@ const getMenuPermissions = ({
       canWrap: false,
       canUnwrap: false,
       canConvert: false,
+      canCreateComponent: false,
       canAddToken: false,
       canOpenSettings: canUseSingleSelectionActions,
       canDelete: canDeleteInContentMode({ instancePath, instances }),
@@ -138,6 +140,8 @@ const getMenuPermissions = ({
     canWrap: canMutateDesign && !isRootOrBody && canUseSingleSelectionActions,
     canUnwrap: canUnwrap && canUseSingleSelectionActions,
     canConvert:
+      canMutateDesign && !isRootOrBody && canUseSingleSelectionActions,
+    canCreateComponent:
       canMutateDesign && !isRootOrBody && canUseSingleSelectionActions,
     canAddToken: canMutateDesign && canUseSingleSelectionActions,
     canOpenSettings: canUseSingleSelectionActions,
@@ -345,6 +349,22 @@ export const MenuItems = () => {
       >
         Convert
       </ContextMenuItem>
+      {isFeatureEnabled("customSlot") && (
+        <ContextMenuItem
+          disabled={!permissions.canCreateComponent}
+          onSelect={() => {
+            emitCommand("createComponent");
+          }}
+        >
+          Create component
+          <ContextMenuItemRightSlot>
+            <Kbd
+              value={["meta", "alt", "k"]}
+              color={shortcutColor(permissions.canCreateComponent)}
+            />
+          </ContextMenuItemRightSlot>
+        </ContextMenuItem>
+      )}
       <ContextMenuSeparator />
       <ContextMenuItem
         disabled={!permissions.canAddToken}

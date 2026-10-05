@@ -8,9 +8,7 @@ import type {
   InstanceData,
 } from "@webstudio-is/react-sdk";
 import {
-  createCustomSlotFragment,
   createId,
-  customSlotComponent,
   getIndexesWithinAncestors,
   type Instance,
   type WsComponentMeta,
@@ -231,21 +229,4 @@ export const registerComponentLibrary = ({
     const nextHooks = [...prevHooks, ...hooks];
     $registeredComponentHooks.set(nextHooks);
   }
-};
-
-/**
- * Lists Custom Slot in the Add panel. Insertion never uses this fragment:
- * every insert builds a Custom Slot with its own fresh Fragment.
- */
-export const registerCustomSlotTemplate = () => {
-  const nextTemplates = new Map($registeredTemplates.get());
-  nextTemplates.set(customSlotComponent, {
-    category: "general",
-    label: "Custom Slot",
-    description:
-      "Custom Slot shares its structure and styles across copies while each copy keeps its own field values.",
-    order: 5,
-    template: createCustomSlotFragment({ createId }),
-  });
-  $registeredTemplates.set(nextTemplates);
 };

@@ -26,7 +26,10 @@ import {
   TextItalicIcon,
 } from "@webstudio-is/icons/svg";
 import {
+  customSlotComponent,
   elementComponent,
+  getComponentName,
+  getCustomSlotContentRootId,
   parseComponentName,
   ROOT_INSTANCE_ID,
   type Instance,
@@ -73,6 +76,7 @@ const htmlIcons: Record<string, undefined | string> = {
 } satisfies Partial<Record<HtmlTags, undefined | string>>;
 
 type InstanceLike = {
+  id?: string;
   component: string;
   label?: string;
   name?: string;
@@ -126,6 +130,17 @@ export const getInstanceLabel = (
   }
   if (instanceOrInstanceId.name) {
     return humanizeString(instanceOrInstanceId.name);
+  }
+  // a copy is named after its component, like Figma instances
+  if (
+    instanceOrInstanceId.component === customSlotComponent &&
+    instanceOrInstanceId.id !== undefined
+  ) {
+    const instances = $instances.get();
+    return getComponentName(
+      instances,
+      getCustomSlotContentRootId(instances, instanceOrInstanceId.id)
+    );
   }
   if (
     instanceOrInstanceId.component === elementComponent &&

@@ -50,6 +50,8 @@ export * from "./runtime/redirect-source";
 export * from "./runtime/registry";
 export * from "./runtime/slot";
 export * from "./runtime/custom-slot-fields";
+export * from "./runtime/custom-slot-create";
+export * from "./runtime/custom-slot-expose";
 export * from "./runtime/custom-slot-content-mode";
 export * from "./runtime/style-copy";
 export * from "./runtime/style-utils";
