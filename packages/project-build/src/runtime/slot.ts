@@ -1,5 +1,7 @@
 import {
   blockTemplateComponent,
+  customSlotComponent,
+  getCustomSlotContentRootId,
   findParentInstanceReference,
   findTreeInstanceIds,
   portalComponent,
@@ -433,6 +435,17 @@ export const getSlotFragmentDropTargetMutable = (
 ): SlotDropTarget | undefined => {
   const [parentId] = dropTarget.parentSelector;
   const instance = instances.get(parentId);
+  // Custom Slots are created with their Fragment; never create or reuse one
+  if (instance?.component === customSlotComponent) {
+    const fragmentId = getCustomSlotContentRootId(instances, parentId);
+    if (fragmentId === undefined) {
+      return;
+    }
+    return {
+      parentSelector: [fragmentId, ...dropTarget.parentSelector],
+      position: dropTarget.position,
+    };
+  }
   if (instance?.component !== "Slot") {
     return;
   }

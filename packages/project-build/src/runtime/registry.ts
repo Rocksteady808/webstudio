@@ -39,6 +39,7 @@ import * as props from "./props";
 import * as runtimeUi from "./runtime-ui";
 import * as projectSearch from "./project-search";
 import * as slot from "./slot";
+import * as customSlotFields from "./custom-slot-fields";
 import * as designTokenImport from "./design-token-import";
 import * as audit from "./audit";
 import * as styles from "./styles";
@@ -1349,6 +1350,48 @@ export const builderRuntimeOperations = [
     }),
     slot.extractSharedSlotInput,
     ({ state, input, context }) => slot.extractSharedSlot(state, input, context)
+  ),
+  runtimeOperation(
+    "customSlots.createField",
+    api("create-custom-slot-field", "createCustomSlotField"),
+    mutationContract({
+      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+    }),
+    customSlotFields.createCustomSlotFieldInput,
+    ({ state, input, context }) =>
+      customSlotFields.createCustomSlotField(state, input, context)
+  ),
+  runtimeOperation(
+    "customSlots.updateField",
+    api("update-custom-slot-field", "updateCustomSlotField"),
+    mutationContract({
+      readNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+      writeNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+    }),
+    customSlotFields.updateCustomSlotFieldInput,
+    ({ state, input }) => customSlotFields.updateCustomSlotField(state, input)
+  ),
+  runtimeOperation(
+    "customSlots.deleteField",
+    api("delete-custom-slot-field", "deleteCustomSlotField"),
+    mutationContract({
+      readNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+      writeNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+    }),
+    customSlotFields.deleteCustomSlotFieldInput,
+    ({ state, input }) => customSlotFields.deleteCustomSlotField(state, input)
+  ),
+  runtimeOperation(
+    "customSlots.setFieldValue",
+    api("set-custom-slot-field-value", "setCustomSlotFieldValue"),
+    mutationContract({
+      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+    }),
+    customSlotFields.setCustomSlotFieldValueInput,
+    ({ state, input, context }) =>
+      customSlotFields.setCustomSlotFieldValue(state, input, context)
   ),
   runtimeOperation(
     "instances.move",

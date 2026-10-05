@@ -63938,6 +63938,456 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
+    id: "customSlots.createField",
+    command: "create-custom-slot-field",
+    client: "createCustomSlotField",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fragmentId: {
+          type: "string",
+          minLength: 1,
+        },
+        fieldId: {
+          description:
+            "Id for the new property, so later steps can refer to it",
+          type: "string",
+          minLength: 1,
+        },
+        name: {
+          type: "string",
+          pattern: "^[A-Za-z_$][\\w$]*$",
+        },
+        type: {
+          type: "string",
+          enum: ["text", "link", "html", "boolean", "image", "variant"],
+        },
+        options: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: {
+                type: "string",
+                pattern: "^[A-Za-z0-9_-]+$",
+              },
+              name: {
+                type: "string",
+                minLength: 1,
+              },
+            },
+            required: ["id", "name"],
+          },
+          description: "Choices of a variant property, e.g. Small and Large",
+        },
+        baseName: {
+          description:
+            "Name of the design without a variant; empty resets to Base",
+          type: "string",
+        },
+        defaultValue: {
+          anyOf: [
+            {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  const: "literal",
+                },
+                value: {},
+              },
+              required: ["type"],
+            },
+            {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  const: "expression",
+                },
+                value: {
+                  type: "string",
+                },
+              },
+              required: ["type", "value"],
+            },
+            {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  const: "asset",
+                },
+                value: {
+                  type: "string",
+                  minLength: 1,
+                },
+              },
+              required: ["type", "value"],
+            },
+            {
+              type: "object",
+              properties: {
+                type: {
+                  type: "string",
+                  const: "page",
+                },
+                value: {
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        pageId: {
+                          type: "string",
+                        },
+                        instanceId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["pageId", "instanceId"],
+                    },
+                  ],
+                },
+              },
+              required: ["type", "value"],
+            },
+          ],
+        },
+      },
+      required: ["fragmentId", "name"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        fieldId: {
+          type: "string",
+        },
+        expression: {
+          type: "string",
+        },
+      },
+      required: ["fieldId", "expression"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources"],
+    writeNamespaces: ["instances", "props", "dataSources"],
+    invalidatesNamespaces: ["instances", "props", "dataSources"],
+    retryOnConflict: false,
+  },
+  {
+    id: "customSlots.updateField",
+    command: "update-custom-slot-field",
+    client: "updateCustomSlotField",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fragmentId: {
+          type: "string",
+          minLength: 1,
+        },
+        fieldId: {
+          type: "string",
+          minLength: 1,
+        },
+        name: {
+          type: "string",
+          pattern: "^[A-Za-z_$][\\w$]*$",
+        },
+        type: {
+          type: "string",
+          enum: ["text", "link", "html", "boolean", "image", "variant"],
+        },
+        options: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              id: {
+                type: "string",
+                pattern: "^[A-Za-z0-9_-]+$",
+              },
+              name: {
+                type: "string",
+                minLength: 1,
+              },
+            },
+            required: ["id", "name"],
+          },
+          description: "Choices of a variant property, e.g. Small and Large",
+        },
+        baseName: {
+          description:
+            "Name of the design without a variant; empty resets to Base",
+          type: "string",
+        },
+        defaultValue: {
+          anyOf: [
+            {
+              anyOf: [
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "literal",
+                    },
+                    value: {},
+                  },
+                  required: ["type"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "expression",
+                    },
+                    value: {
+                      type: "string",
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "asset",
+                    },
+                    value: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "page",
+                    },
+                    value: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            pageId: {
+                              type: "string",
+                            },
+                            instanceId: {
+                              type: "string",
+                            },
+                          },
+                          required: ["pageId", "instanceId"],
+                        },
+                      ],
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+              ],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      required: ["fragmentId", "fieldId"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        fieldId: {
+          type: "string",
+        },
+      },
+      required: ["fieldId"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources", "styles"],
+    writeNamespaces: ["instances", "props", "dataSources", "styles"],
+    invalidatesNamespaces: ["instances", "props", "dataSources", "styles"],
+    retryOnConflict: false,
+  },
+  {
+    id: "customSlots.deleteField",
+    command: "delete-custom-slot-field",
+    client: "deleteCustomSlotField",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fragmentId: {
+          type: "string",
+          minLength: 1,
+        },
+        fieldId: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      required: ["fragmentId", "fieldId"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        fieldId: {
+          type: "string",
+        },
+      },
+      required: ["fieldId"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources", "styles"],
+    writeNamespaces: ["instances", "props", "dataSources", "styles"],
+    invalidatesNamespaces: ["instances", "props", "dataSources", "styles"],
+    retryOnConflict: false,
+    requiresConfirm: true,
+  },
+  {
+    id: "customSlots.setFieldValue",
+    command: "set-custom-slot-field-value",
+    client: "setCustomSlotFieldValue",
+    kind: "mutation",
+    inputSchema: {
+      type: "object",
+      properties: {
+        slotId: {
+          type: "string",
+          minLength: 1,
+        },
+        fieldId: {
+          type: "string",
+          minLength: 1,
+        },
+        value: {
+          anyOf: [
+            {
+              anyOf: [
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "literal",
+                    },
+                    value: {},
+                  },
+                  required: ["type"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "expression",
+                    },
+                    value: {
+                      type: "string",
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "asset",
+                    },
+                    value: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+                {
+                  type: "object",
+                  properties: {
+                    type: {
+                      type: "string",
+                      const: "page",
+                    },
+                    value: {
+                      anyOf: [
+                        {
+                          type: "string",
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            pageId: {
+                              type: "string",
+                            },
+                            instanceId: {
+                              type: "string",
+                            },
+                          },
+                          required: ["pageId", "instanceId"],
+                        },
+                      ],
+                    },
+                  },
+                  required: ["type", "value"],
+                },
+              ],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        override: {
+          description:
+            "Save the value only for this parent copy, like a Figma override of a nested instance",
+          type: "object",
+          properties: {
+            ownerSlotId: {
+              type: "string",
+              minLength: 1,
+            },
+            key: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          required: ["ownerSlotId", "key"],
+        },
+      },
+      required: ["slotId", "fieldId", "value"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        slotId: {
+          type: "string",
+        },
+        fieldId: {
+          type: "string",
+        },
+      },
+      required: ["slotId", "fieldId"],
+      additionalProperties: {},
+    },
+    readNamespaces: ["instances", "props", "dataSources"],
+    writeNamespaces: ["instances", "props", "dataSources"],
+    invalidatesNamespaces: ["instances", "props", "dataSources"],
+    retryOnConflict: false,
+  },
+  {
     id: "instances.move",
     command: "move-instance",
     client: "moveInstance",

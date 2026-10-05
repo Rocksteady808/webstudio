@@ -49,6 +49,8 @@ export * from "./runtime/redirect-parsers";
 export * from "./runtime/redirect-source";
 export * from "./runtime/registry";
 export * from "./runtime/slot";
+export * from "./runtime/custom-slot-fields";
+export * from "./runtime/custom-slot-content-mode";
 export * from "./runtime/style-copy";
 export * from "./runtime/style-utils";
 export * from "./runtime/styles";

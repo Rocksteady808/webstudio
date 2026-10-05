@@ -9,6 +9,7 @@ import { generateCss, type CssConfig } from "./css";
 import type { Breakpoint } from "./schema/breakpoints";
 import type { Asset } from "./schema/assets";
 import { rootComponent } from "./core-metas";
+import { getCustomSlotVariantState } from "./custom-slot-fields";
 
 const Body = createTemplateComponentFixture("Body");
 const Box = createTemplateComponentFixture("Box");
@@ -623,5 +624,69 @@ test("generate presets only for used tags", () => {
       ["1", ["w-box"]],
       ["2", ["w-box"]],
     ])
+  );
+});
+
+test("variant styles only apply inside copies using the option", () => {
+  const { cssText } = generateAllCss({
+    ...renderData(<Box ws:id="button"></Box>),
+    breakpoints: toMap<Breakpoint>([{ id: "base", label: "" }]),
+    styleSourceSelections: new Map([
+      ["button", { instanceId: "button", values: ["local"] }],
+    ]),
+    styles: new Map([
+      [
+        "local:base:backgroundColor:",
+        {
+          styleSourceId: "local",
+          breakpointId: "base",
+          property: "backgroundColor",
+          value: { type: "keyword", value: "black" },
+        },
+      ],
+      [
+        "local:base:backgroundColor:variant",
+        {
+          styleSourceId: "local",
+          breakpointId: "base",
+          state: getCustomSlotVariantState("small"),
+          property: "backgroundColor",
+          value: { type: "keyword", value: "red" },
+        },
+      ],
+    ]),
+    componentMetas: new Map(),
+    assetBaseUrl: "",
+  });
+  expect(cssText).toContain(
+    `.w-box:is([data-ws-variant~="small"] *) {\n    background-color: red`
+  );
+  expect(cssText).toContain(`background-color: black`);
+});
+
+test("a variant can have its own hover styles", () => {
+  const { cssText } = generateAllCss({
+    ...renderData(<Box ws:id="button"></Box>),
+    breakpoints: toMap<Breakpoint>([{ id: "base", label: "" }]),
+    styleSourceSelections: new Map([
+      ["button", { instanceId: "button", values: ["local"] }],
+    ]),
+    styles: new Map([
+      [
+        "local:base:color:variant-hover",
+        {
+          styleSourceId: "local",
+          breakpointId: "base",
+          state: `${getCustomSlotVariantState("reverse")}:hover`,
+          property: "color",
+          value: { type: "keyword", value: "red" },
+        },
+      ],
+    ]),
+    componentMetas: new Map(),
+    assetBaseUrl: "",
+  });
+  expect(cssText).toContain(
+    `.w-box:is([data-ws-variant~="reverse"] *):hover {\n    color: red`
   );
 });

@@ -23,13 +23,10 @@ import {
   getIndexesWithinAncestors,
   elementComponent,
   customSlotComponent,
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
-  parseCustomSlotFields,
-  parseCustomSlotFieldValues,
+  getCustomSlotCopy,
+  getCustomSlotTag,
+  customSlotVariantAttribute,
+  getCustomSlotVariantAttribute,
 } from "@webstudio-is/sdk";
 import { transpileExpression } from "@webstudio-is/expression";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
@@ -210,7 +207,12 @@ export const generateJsxElement = ({
   if (index !== undefined) {
     generatedProps += `\n${indexProperty}="${index}"`;
   }
-  if (instance.tag !== undefined && instance.component !== elementComponent) {
+  // Custom Slot copies render their tag directly instead of as a prop
+  if (
+    instance.tag !== undefined &&
+    instance.component !== elementComponent &&
+    instance.component !== customSlotComponent
+  ) {
     generatedProps += `\n${tagProperty}=${JSON.stringify(instance.tag)}`;
   }
 
@@ -373,7 +375,8 @@ export const generateJsxElement = ({
   ) {
     generatedElement += children;
   } else if (instance.component === customSlotComponent) {
-    generatedElement += `<div${generatedProps}>\n${children}</div>\n`;
+    const tag = getCustomSlotTag(instance.tag);
+    generatedElement += `<${tag}${generatedProps}>\n${children}</${tag}>\n`;
   } else {
     let componentVariable;
     if (instance.component === elementComponent) {
@@ -443,6 +446,7 @@ export const generateJsxChildren = ({
   excludePlaceholders,
   publishedContentBlocks,
   contentBodyOverride,
+  customSlotAncestors = [],
 }: {
   scope: Scope;
   metas: Map<Instance["component"], WsComponentMeta>;
@@ -462,6 +466,8 @@ export const generateJsxChildren = ({
     instanceId: Instance["id"];
     children: Instance["children"];
   }>;
+  /** Custom Slot copies this content is shown inside, innermost first */
+  customSlotAncestors?: readonly Instance["id"][];
 }) => {
   let generatedChildren = "";
   for (const child of children) {
@@ -494,45 +500,22 @@ export const generateJsxChildren = ({
         continue;
       }
       if (instance.component === customSlotComponent) {
-        const rootId = getCustomSlotContentRootId(instances, instanceId);
-        if (rootId === undefined) {
+        // a nested copy uses the overrides its parent copies set for it
+        const copy = getCustomSlotCopy({
+          instances,
+          dataSources,
+          slotId: instance.id,
+          enclosingCopyIds: customSlotAncestors,
+        });
+        if (copy === undefined) {
           continue;
         }
-        const root = instances.get(rootId);
-        if (root === undefined) {
-          continue;
-        }
-        const schema = findCustomSlotDataSource(
-          dataSources,
-          rootId,
-          customSlotSchemaVariable
-        );
-        const values = findCustomSlotDataSource(
-          dataSources,
-          instanceId,
-          customSlotValuesVariable
-        );
-        const component = findCustomSlotDataSource(
-          dataSources,
-          rootId,
-          customSlotComponentVariable
-        );
-        if (component?.type !== "parameter") {
-          continue;
-        }
-        const fields = parseCustomSlotFields(
-          schema?.type === "variable" && schema.value.type === "json"
-            ? schema.value.value
-            : undefined
-        );
-        const localValues = parseCustomSlotFieldValues(
-          values?.type === "variable" && values.value.type === "json"
-            ? values.value.value
-            : undefined
-        );
+        const { fragment: root, component, fields } = copy;
+        const localValues = copy.values;
         const componentName = scope.getName(component.id, component.name);
         const objectEntries = fields.map((field) => {
           const value = localValues[field.id] ?? field.defaultValue;
+          // page links are resolved to paths before generation
           const expression =
             value?.type === "expression"
               ? generateExpression({
@@ -541,10 +524,13 @@ export const generateJsxChildren = ({
                   usedDataSources,
                   scope,
                 })
-              : (JSON.stringify(value?.value) ?? "undefined");
+              : value?.type === "literal"
+                ? (JSON.stringify(value.value) ?? "undefined")
+                : "undefined";
           return `${JSON.stringify(field.name)}: ${expression}`;
         });
         const sharedChildren = generateJsxChildren({
+          customSlotAncestors: [instance.id, ...customSlotAncestors],
           scope,
           metas,
           tagsOverrides,
@@ -561,13 +547,31 @@ export const generateJsxChildren = ({
           contentBodyOverride,
         });
         const boundChildren = `{((${componentName}: any) => <Fragment>\n${sharedChildren}</Fragment>)({${objectEntries.join(", ")}})}\n`;
+        // the copy's variants decide which variant styles apply inside
+        const variantAttribute = getCustomSlotVariantAttribute(
+          fields,
+          localValues
+        );
+        const occurrenceProps =
+          variantAttribute.length === 0
+            ? props
+            : new Map(props).set(
+                `${instance.id}:${customSlotVariantAttribute}`,
+                {
+                  id: `${instance.id}:${customSlotVariantAttribute}`,
+                  instanceId: instance.id,
+                  name: customSlotVariantAttribute,
+                  type: "string",
+                  value: variantAttribute,
+                }
+              );
         generatedChildren += generateJsxElement({
           context: "jsx",
           scope,
           metas,
           tagsOverrides,
           instance,
-          props,
+          props: occurrenceProps,
           resources,
           dataSources,
           usedDataSources,
@@ -581,6 +585,7 @@ export const generateJsxChildren = ({
       let generatedInstanceChildren: string;
       if (contentBodyOverride?.instanceId === instance.id) {
         generatedInstanceChildren = generateJsxChildren({
+          customSlotAncestors,
           classesMap,
           scope,
           metas,
@@ -597,6 +602,7 @@ export const generateJsxChildren = ({
         });
       } else if (publishedContent === undefined) {
         generatedInstanceChildren = generateJsxChildren({
+          customSlotAncestors,
           classesMap,
           scope,
           metas,
@@ -647,6 +653,7 @@ export const generateJsxChildren = ({
             frontmatter,
           }) => {
             const generated = generateJsxChildren({
+              customSlotAncestors,
               classesMap,
               scope,
               metas,

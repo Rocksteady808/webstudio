@@ -34,6 +34,7 @@ const contentModeBuildColumns = [
   "styleSourceSelections",
   "styles",
   "breakpoints",
+  "dataSources",
 ] as const satisfies BuildColumn[];
 
 const namespaceBuildColumns = {
@@ -338,6 +339,7 @@ export const applyPatchRequest = async (
         styleSourceSelections: build.styleSourceSelections,
         styles: build.styles,
         breakpoints: build.breakpoints,
+        dataSources: build.dataSources,
       });
     }
   );

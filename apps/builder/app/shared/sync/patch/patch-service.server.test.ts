@@ -416,7 +416,7 @@ describe("applyPatchRequest", () => {
     });
     expect(context.selectedColumns).toEqual([
       "projectId, version",
-      "instances, props, styleSources, styleSourceSelections, styles, breakpoints",
+      "instances, props, styleSources, styleSourceSelections, styles, breakpoints, dataSources",
       "projectId, version, lastTransactionId, props",
     ]);
     expect(result).toEqual({

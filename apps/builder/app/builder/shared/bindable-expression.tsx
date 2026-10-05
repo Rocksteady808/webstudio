@@ -3,6 +3,7 @@ import {
   BindingControl,
   BindingPopover,
   type BindingVariant,
+  type CustomSlotFieldHint,
 } from "./binding-popover";
 
 export type BindingState = {
@@ -29,6 +30,7 @@ export const BindableExpressionControl = <Value,>({
   onChangeExpression,
   onRemove,
   bindingState,
+  fieldHint,
 }: {
   expression: string;
   value: Value;
@@ -46,6 +48,7 @@ export const BindableExpressionControl = <Value,>({
   onChangeExpression: (expression: string) => void;
   onRemove?: (evaluatedValue: unknown) => void;
   bindingState?: BindingState;
+  fieldHint?: CustomSlotFieldHint;
 }) => {
   if (bindingState === undefined) {
     return (
@@ -61,6 +64,7 @@ export const BindableExpressionControl = <Value,>({
         onChangeValue={onChangeValue}
         onChangeExpression={onChangeExpression}
         onRemove={onRemove}
+        fieldHint={fieldHint}
       />
     );
   }
@@ -80,6 +84,7 @@ export const BindableExpressionControl = <Value,>({
           validate={validate}
           variant={variant}
           value={expression}
+          fieldHint={fieldHint}
           onChange={onChangeExpression}
           onRemove={onRemove}
         />

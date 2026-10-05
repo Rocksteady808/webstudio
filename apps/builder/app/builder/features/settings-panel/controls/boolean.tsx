@@ -41,6 +41,7 @@ export const BooleanControl = ({
         onRemove={(value) =>
           onChange({ type: "boolean", value: Boolean(value) })
         }
+        fieldHint={{ type: "boolean" }}
         renderControl={({ value, readOnly, onChangeValue }) => (
           <Switch
             disabled={readOnly}

@@ -141,6 +141,10 @@ export const builderRuntimeCutoverManifests = [
       "instances.insertMdxText",
       "slots.attach",
       "slots.extract",
+      "customSlots.createField",
+      "customSlots.updateField",
+      "customSlots.deleteField",
+      "customSlots.setFieldValue",
     ] as const,
     callers: [
       "appRouter.api.instances",

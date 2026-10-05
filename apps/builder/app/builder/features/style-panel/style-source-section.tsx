@@ -7,8 +7,13 @@ import {
   type StyleSource,
   type StyleSourceToken,
   type StyleDecl,
+  splitCustomSlotVariantState,
 } from "@webstudio-is/sdk";
-import { type RenameStyleSourceError } from "@webstudio-is/project-build/runtime";
+import {
+  getCustomSlotActiveVariantState,
+  getCustomSlotVariantStates,
+  type RenameStyleSourceError,
+} from "@webstudio-is/project-build/runtime";
 import { type ItemSource, StyleSourceInput } from "./style-source";
 import {
   renameStyleSource,
@@ -26,13 +31,18 @@ import {
   $selectedStyleState,
 } from "~/shared/nano-states";
 import {
+  $dataSources,
+  $instances,
   $styleSourceSelections,
   $styleSources,
   $styles,
 } from "~/shared/sync/data-stores";
 import { executeRuntimeMutation } from "~/shared/instance-utils/data";
 import { subscribe } from "~/shared/pubsub";
-import { $selectedInstance } from "~/shared/nano-states";
+import {
+  $selectedInstance,
+  $selectedInstanceSelector,
+} from "~/shared/nano-states";
 import { $instanceTags } from "./shared/model";
 
 // Declare command for this module
@@ -53,7 +63,13 @@ const selectStyleSource = (
   const selectedStyleSources = new Map($selectedStyleSources.get());
   selectedStyleSources.set(instanceId, styleSourceId);
   $selectedStyleSources.set(selectedStyleSources);
-  $selectedStyleState.set(state);
+  // turning off a variant's hover goes back to the variant, not the base
+  const variant = splitCustomSlotVariantState($selectedStyleState.get());
+  $selectedStyleState.set(
+    state === undefined && variant !== undefined && variant.state !== ""
+      ? variant.variantState
+      : state
+  );
 };
 
 const createStyleSource = (name: string) => {
@@ -251,6 +267,60 @@ const getComponentStates = ({
   return [...states, ...componentStatesConfig, ...pseudoElements];
 };
 
+/**
+ * Inside a copy that uses a variant, states like Hover edit that variant's
+ * hover, the same way styling without a state edits the variant, so a
+ * variant can look different on hover like in Webflow.
+ */
+const scopeStatesToVariant = ({
+  states,
+  variantStates,
+  activeVariantState,
+}: {
+  states: SelectorConfig[];
+  variantStates: Array<{ label: string; selector: string }>;
+  activeVariantState: undefined | string;
+}): SelectorConfig[] => {
+  const result = new Map<string, SelectorConfig>();
+  for (const config of states) {
+    const variant = splitCustomSlotVariantState(config.selector);
+    if (variant === undefined) {
+      if (activeVariantState === undefined || config.type !== "state") {
+        result.set(config.selector, config);
+        continue;
+      }
+      const selector = `${activeVariantState}${config.selector}`;
+      result.set(selector, { ...config, selector });
+      continue;
+    }
+    if (variant.state === "") {
+      result.set(config.selector, config);
+      continue;
+    }
+    // a state already used together with a variant
+    if (variant.variantState === activeVariantState) {
+      if (result.has(config.selector) === false) {
+        result.set(config.selector, {
+          ...config,
+          label: variant.state,
+        });
+      }
+      continue;
+    }
+    const variantLabel = variantStates.find(
+      (item) => item.selector === variant.variantState
+    )?.label;
+    result.set(config.selector, {
+      ...config,
+      label:
+        variantLabel === undefined
+          ? config.label
+          : `${variantLabel} ${variant.state}`,
+    });
+  }
+  return Array.from(result.values());
+};
+
 const $componentStates = computed(
   [
     $selectedInstance,
@@ -259,6 +329,9 @@ const $componentStates = computed(
     $styles,
     $selectedStyleState,
     $styleSourceSelections,
+    $selectedInstanceSelector,
+    $instances,
+    $dataSources,
   ],
   (
     selectedInstance,
@@ -266,22 +339,44 @@ const $componentStates = computed(
     instanceTags,
     styles,
     selectedStyleState,
-    styleSourceSelections
+    styleSourceSelections,
+    selectedInstanceSelector,
+    instances,
+    dataSources
   ) => {
     if (selectedInstance === undefined) {
       return;
     }
     const tag = instanceTags.get(selectedInstance.id);
     const meta = registeredComponentMetas.get(selectedInstance.component);
+    const instanceSelector = selectedInstanceSelector ?? [];
+    // variants of the Custom Slot this element is inside
+    const variantStates = getCustomSlotVariantStates({
+      instances,
+      dataSources,
+      instanceSelector,
+    });
 
-    return getComponentStates({
+    const states = getComponentStates({
       predefinedStates: pseudoClassesByTag[tag ?? ""] ?? [],
-      componentStates: meta?.states ?? [],
+      componentStates: [...(meta?.states ?? []), ...variantStates],
       instanceStyleSourceIds: new Set(
         styleSourceSelections.get(selectedInstance.id)?.values
       ),
       styles: styles.values(),
       selectedStyleState,
+    });
+    if (variantStates.length === 0) {
+      return states;
+    }
+    return scopeStatesToVariant({
+      states,
+      variantStates,
+      activeVariantState: getCustomSlotActiveVariantState({
+        instances,
+        dataSources,
+        instanceSelector,
+      }),
     });
   }
 );
@@ -442,6 +537,7 @@ export const StyleSourcesSection = () => {
 };
 
 export const __testing__ = {
+  scopeStatesToVariant,
   clearStyles,
   convertLocalStyleSourceToToken,
   duplicateStyleSource,

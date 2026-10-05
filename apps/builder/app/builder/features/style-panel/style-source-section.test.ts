@@ -25,6 +25,7 @@ const {
   duplicateStyleSource,
   getComponentStates,
   reorderStyleSources,
+  scopeStatesToVariant,
 } = __testing__;
 
 enableMapSet();
@@ -341,4 +342,71 @@ test("reorders style sources while local style source is temporary", () => {
     "token2",
     "token1",
   ]);
+});
+
+describe("scopeStatesToVariant", () => {
+  const reverse = ':is([data-ws-variant~="reverse"] *)';
+  const small = ':is([data-ws-variant~="small"] *)';
+  const variantStates = [
+    { label: "Variant: Reverse", selector: reverse },
+    { label: "Variant: Small", selector: small },
+  ];
+  const states = getComponentStates({
+    predefinedStates: [],
+    componentStates: variantStates,
+    instanceStyleSourceIds: new Set(["local"]),
+    styles: [
+      { styleSourceId: "local", state: `${reverse}:hover` },
+      { styleSourceId: "local", state: `${small}:focus` },
+    ],
+    selectedStyleState: undefined,
+  });
+
+  test("states inside a copy using a variant edit that variant", () => {
+    const scoped = scopeStatesToVariant({
+      states,
+      variantStates,
+      activeVariantState: reverse,
+    });
+    expect(scoped).toContainEqual(
+      expect.objectContaining({ label: ":hover", selector: `${reverse}:hover` })
+    );
+    expect(scoped).toContainEqual(
+      expect.objectContaining({
+        label: ":active",
+        selector: `${reverse}:active`,
+      })
+    );
+    // the variants themselves stay selectable
+    expect(scoped).toContainEqual(
+      expect.objectContaining({ label: "Variant: Reverse", selector: reverse })
+    );
+    // another variant's hover is labeled with its variant
+    expect(scoped).toContainEqual(
+      expect.objectContaining({
+        label: "Variant: Small :focus",
+        selector: `${small}:focus`,
+      })
+    );
+    expect(
+      scoped.filter((state) => state.selector === `${reverse}:hover`)
+    ).toHaveLength(1);
+  });
+
+  test("in a base copy states stay as they are", () => {
+    const scoped = scopeStatesToVariant({
+      states,
+      variantStates,
+      activeVariantState: undefined,
+    });
+    expect(scoped).toContainEqual(
+      expect.objectContaining({ selector: ":hover" })
+    );
+    expect(scoped).toContainEqual(
+      expect.objectContaining({
+        label: "Variant: Reverse :hover",
+        selector: `${reverse}:hover`,
+      })
+    );
+  });
 });

@@ -2,6 +2,7 @@ import { parseError } from "~/shared/error/error-parse";
 import {
   useEffect,
   forwardRef,
+  createElement,
   type ForwardedRef,
   useRef,
   useLayoutEffect,
@@ -34,6 +35,7 @@ import {
   elementComponent,
   customSlotComponent,
   getCustomSlotContentRootId,
+  getCustomSlotTag,
 } from "@webstudio-is/sdk";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
 import {
@@ -348,10 +350,13 @@ const DroppableComponentStub = forwardRef<
 });
 DroppableComponentStub.displayName = "DroppableComponentStub";
 
+// renders a Custom Slot copy as its chosen tag, div by default
 const CustomSlotComponentStub = forwardRef<
-  HTMLDivElement,
-  { children?: ReactNode }
->((props, ref) => <div {...props} ref={ref} />);
+  HTMLElement,
+  { children?: ReactNode; [tagProperty]?: string }
+>(({ [tagProperty]: tag, ...props }, ref) =>
+  createElement(getCustomSlotTag(tag), { ...props, ref })
+);
 CustomSlotComponentStub.displayName = "CustomSlotComponentStub";
 
 const getRenderableChildren = (

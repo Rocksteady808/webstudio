@@ -1,5 +1,6 @@
 import type { Patch } from "immer";
 import { isRecord } from "../shared/type-utils";
+import { applyCustomSlotContentModeDataSourcePatches } from "./custom-slot-content-mode";
 import {
   instance,
   instanceChild,
@@ -10,6 +11,7 @@ import {
   pagePath,
   blockComponent,
   blockTemplateComponent,
+  customSlotComponent,
   findContentBlockBodyContainers,
   findWritableContentBlockDocumentBindings,
   getHtmlTagsFromProps,
@@ -17,6 +19,7 @@ import {
   isPathnamePattern,
   getStyleDeclKey,
   type Breakpoints,
+  type DataSources,
   type Instance,
   type Prop,
   type PropMeta,
@@ -48,6 +51,8 @@ export type ContentModeCapabilities = {
   styleSourceSelections: StyleSourceSelections;
   styles: Styles;
   breakpoints?: Breakpoints;
+  /** needed to fill in Custom Slot copy values in content mode */
+  dataSources?: DataSources;
   contentRootIds: Set<Instance["id"]>;
   frontmatterBoundPropIds?: ReadonlySet<Prop["id"]>;
   frontmatterBoundTextInstanceIds?: ReadonlySet<Instance["id"]>;
@@ -255,6 +260,11 @@ const getContentModeEditableInstanceRootIds = ({
     }
     editableInstanceIds.add(instanceId);
     rootIdsByInstanceId.set(instanceId, rootId);
+    // a Custom Slot's content is shared by every copy, so content editors
+    // fill in the copy's values instead of editing the shared design
+    if (instance.component === customSlotComponent) {
+      return;
+    }
     for (const child of instance.children ?? []) {
       if (child.type === "id") {
         visit(child.value, rootId);
@@ -447,6 +457,7 @@ export const getContentModeCapabilities = ({
   styleSourceSelections = new Map(),
   styles = new Map(),
   breakpoints,
+  dataSources,
   contentRootIds: providedContentRootIds,
 }: {
   instances: Map<Instance["id"], Instance>;
@@ -456,6 +467,7 @@ export const getContentModeCapabilities = ({
   styleSourceSelections?: StyleSourceSelections;
   styles?: Styles;
   breakpoints?: Breakpoints;
+  dataSources?: DataSources;
   contentRootIds?: Set<Instance["id"]>;
 }): ContentModeCapabilities => {
   const editablePropIds = new Set<Prop["id"]>();
@@ -485,6 +497,7 @@ export const getContentModeCapabilities = ({
     styleSourceSelections,
     styles,
     breakpoints,
+    dataSources,
     contentRootIds,
     frontmatterBoundPropIds: frontmatterTargets.propIds,
     frontmatterBoundTextInstanceIds: frontmatterTargets.textInstanceIds,
@@ -1481,6 +1494,25 @@ const validatePatchChange = (
     return validatePagePatches(context, change.patches);
   }
 
+  if (change.namespace === "dataSources") {
+    const { capabilities } = context;
+    const result = applyCustomSlotContentModeDataSourcePatches({
+      instances: capabilities.instances,
+      editableInstanceIds: getContentModeEditableInstanceIds({
+        contentRootIds: capabilities.contentRootIds,
+        instances: capabilities.instances,
+      }),
+      dataSources: capabilities.dataSources,
+      patches: change.patches,
+    });
+    if (result.success && result.dataSources !== undefined) {
+      capabilities.dataSources = result.dataSources;
+    }
+    return result.success
+      ? { success: true }
+      : { success: false, error: result.error };
+  }
+
   return {
     success: false,
     error: `Namespace "${change.namespace}" is not editable in content mode.`,
@@ -1597,6 +1629,10 @@ export const applyContentModeTransaction = ({
       capabilities.breakpoints === undefined
         ? undefined
         : new Map(capabilities.breakpoints),
+    dataSources:
+      capabilities.dataSources === undefined
+        ? undefined
+        : new Map(capabilities.dataSources),
     contentRootIds: new Set(capabilities.contentRootIds),
   };
   const initialEditableInstanceRootIds = getContentModeEditableInstanceRootIds({

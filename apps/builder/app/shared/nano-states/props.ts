@@ -18,15 +18,20 @@ import {
   SYSTEM_VARIABLE_ID,
   customSlotComponent,
   customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
-  parseCustomSlotFields,
-  parseCustomSlotFieldValues,
   resolveCustomSlotFields,
+  type DataSources,
+  getCustomSlotCopy,
+  getCustomSlotEnclosingCopies,
+  customSlotVariantAttribute,
+  getCustomSlotVariantAttribute,
+  getCustomSlotPageHref,
+  type CustomSlotPageLink,
+  type Assets,
+  type Pages,
+  type Props,
 } from "@webstudio-is/sdk";
 import { transpileExpression } from "@webstudio-is/expression";
+import { isCustomSlotInternalVariable } from "@webstudio-is/project-build/runtime";
 import {
   normalizeProps,
   textContentAttribute,
@@ -354,6 +359,49 @@ export const $unscopedVariableValues = computed(
  * essential to support collections which provide different values in each item
  * for same variables
  */
+
+// the same URL normalizeProps gives a regular Image src asset
+const createCustomSlotAssetResolver = (assets: Assets) => (assetId: string) => {
+  const asset = assets.get(assetId);
+  return asset === undefined ? undefined : `${assetBaseUrl}${asset.name}`;
+};
+
+const createCustomSlotPageResolver =
+  (pages: undefined | Pages, props: Props) => (value: CustomSlotPageLink) =>
+    pages === undefined
+      ? undefined
+      : getCustomSlotPageHref({ value, pages, props: props.values() });
+
+/**
+ * Only the data sources Custom Slots read, kept as the same map while they
+ * do not change, so props are not recomputed for every variable edit and
+ * projects without Custom Slots never recompute because of them.
+ */
+let previousCustomSlotDataSources: DataSources = new Map();
+const $customSlotDataSources = computed($dataSources, (dataSources) => {
+  const next: DataSources = new Map();
+  for (const dataSource of dataSources.values()) {
+    if (
+      isCustomSlotInternalVariable(dataSource) ||
+      (dataSource.type === "parameter" &&
+        dataSource.name === customSlotComponentVariable)
+    ) {
+      next.set(dataSource.id, dataSource);
+    }
+  }
+  const unchanged =
+    next.size === previousCustomSlotDataSources.size &&
+    Array.from(next).every(
+      ([id, dataSource]) => previousCustomSlotDataSources.get(id) === dataSource
+    );
+  if (unchanged === false) {
+    previousCustomSlotDataSources = next;
+  }
+  return previousCustomSlotDataSources;
+});
+
+export const __testing__ = { $customSlotDataSources };
+
 const $propValuesInput = computed(
   [
     $instances,
@@ -364,7 +412,7 @@ const $propValuesInput = computed(
     $assets,
     $uploadingFilesDataStore,
     $externalContentRoots,
-    $dataSources,
+    $customSlotDataSources,
   ],
   (
     instances,
@@ -400,6 +448,16 @@ const computePropValues = async ({
   externalContentRoots,
   dataSources,
 }: ReturnType<typeof $propValuesInput.get>) => {
+  const resolveCustomSlotPage = createCustomSlotPageResolver(pages, props);
+  const resolveCustomSlotAsset = createCustomSlotAssetResolver(assets);
+  // global data sources, collected once instead of once per Custom Slot copy
+  let globalDataSourceIds: undefined | DataSource["id"][];
+  const getGlobalDataSourceIds = () => {
+    globalDataSourceIds ??= Array.from($dataSources.get().values())
+      .filter((dataSource) => dataSource.scopeInstanceId === ROOT_INSTANCE_ID)
+      .map((dataSource) => dataSource.id);
+    return globalDataSourceIds;
+  };
   // already includes global variables
   const variableValues = new Map<string, unknown>(unscopedVariableValues);
 
@@ -519,57 +577,48 @@ const computePropValues = async ({
       return;
     }
     if (instance.component === customSlotComponent) {
-      const rootId = getCustomSlotContentRootId(instances, instanceId);
-      if (rootId === undefined) {
+      // a nested copy shows the overrides its parent copies set for it
+      const copy = getCustomSlotCopy({
+        instances,
+        dataSources,
+        slotId: instanceId,
+        enclosingCopyIds: getCustomSlotEnclosingCopies(
+          instances,
+          instanceSelector
+        ),
+      });
+      if (copy === undefined) {
         return;
       }
-      const root = instances.get(rootId);
-      const component = findCustomSlotDataSource(
-        dataSources,
-        rootId,
-        customSlotComponentVariable
+      const { fragment: root, component, fields } = copy;
+      const rootId = root.id;
+      const localValues = copy.values;
+      // the copy's variants decide which variant styles apply inside
+      const variantAttribute = getCustomSlotVariantAttribute(
+        fields,
+        localValues
       );
-      if (root === undefined || component?.type !== "parameter") {
-        return;
+      if (variantAttribute.length > 0) {
+        propValues.set(customSlotVariantAttribute, variantAttribute);
       }
-      const schema = findCustomSlotDataSource(
-        dataSources,
-        rootId,
-        customSlotSchemaVariable
-      );
-      const values = findCustomSlotDataSource(
-        dataSources,
-        instanceId,
-        customSlotValuesVariable
-      );
-      const fields = parseCustomSlotFields(
-        schema?.type === "variable" && schema.value.type === "json"
-          ? schema.value.value
-          : undefined
-      );
-      const localValues = parseCustomSlotFieldValues(
-        values?.type === "variable" && values.value.type === "json"
-          ? values.value.value
-          : undefined
-      );
       const componentValue = await resolveCustomSlotFields({
         fields,
         values: localValues,
         evaluateExpression: (expression) =>
           computeExpression(expression, currentVariableValues),
+        resolvePage: resolveCustomSlotPage,
+        resolveAsset: resolveCustomSlotAsset,
       });
       const childVariableValues = new Map<string, unknown>();
       childVariableValues.set(
         SYSTEM_VARIABLE_ID,
         currentVariableValues.get(SYSTEM_VARIABLE_ID)
       );
-      for (const dataSource of dataSources.values()) {
-        if (dataSource.scopeInstanceId === ROOT_INSTANCE_ID) {
-          childVariableValues.set(
-            dataSource.id,
-            currentVariableValues.get(dataSource.id)
-          );
-        }
+      for (const dataSourceId of getGlobalDataSourceIds()) {
+        childVariableValues.set(
+          dataSourceId,
+          currentVariableValues.get(dataSourceId)
+        );
       }
       childVariableValues.set(component.id, componentValue);
       for (const child of root.children) {
@@ -687,6 +736,12 @@ const computeVariableValues = async ({
   system,
   externalContentRoots,
 }: ReturnType<typeof $variableValuesInput.get>) => {
+  // read pages and assets only when a Custom Slot link or image needs them,
+  // so projects without Custom Slots do not recompute on every upload
+  const resolveCustomSlotPage = (value: CustomSlotPageLink) =>
+    createCustomSlotPageResolver($pages.get(), props)(value);
+  const resolveCustomSlotAsset = (assetId: string) =>
+    createCustomSlotAssetResolver($assets.get())(assetId);
   const propsByInstanceId = mapGroupBy(
     props.values(),
     (prop) => prop.instanceId
@@ -831,44 +886,29 @@ const computeVariableValues = async ({
       return;
     }
     if (instance.component === customSlotComponent) {
-      const rootId = getCustomSlotContentRootId(instances, instanceId);
-      if (rootId === undefined) {
+      // a nested copy shows the overrides its parent copies set for it
+      const copy = getCustomSlotCopy({
+        instances,
+        dataSources,
+        slotId: instanceId,
+        enclosingCopyIds: getCustomSlotEnclosingCopies(
+          instances,
+          instanceSelector
+        ),
+      });
+      if (copy === undefined) {
         return;
       }
-      const root = instances.get(rootId);
-      const component = findCustomSlotDataSource(
-        dataSources,
-        rootId,
-        customSlotComponentVariable
-      );
-      if (root === undefined || component?.type !== "parameter") {
-        return;
-      }
-      const schema = findCustomSlotDataSource(
-        dataSources,
-        rootId,
-        customSlotSchemaVariable
-      );
-      const values = findCustomSlotDataSource(
-        dataSources,
-        instanceId,
-        customSlotValuesVariable
-      );
-      const fields = parseCustomSlotFields(
-        schema?.type === "variable" && schema.value.type === "json"
-          ? schema.value.value
-          : undefined
-      );
-      const localValues = parseCustomSlotFieldValues(
-        values?.type === "variable" && values.value.type === "json"
-          ? values.value.value
-          : undefined
-      );
+      const { fragment: root, component, fields } = copy;
+      const rootId = root.id;
+      const localValues = copy.values;
       const componentValue = await resolveCustomSlotFields({
         fields,
         values: localValues,
         evaluateExpression: (expression) =>
           computeExpression(expression, variableValues),
+        resolvePage: resolveCustomSlotPage,
+        resolveAsset: resolveCustomSlotAsset,
       });
       const ownerVariableValues = new Map(variableValues);
       ownerVariableValues.set(component.id, componentValue);

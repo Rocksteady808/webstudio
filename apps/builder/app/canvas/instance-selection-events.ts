@@ -12,7 +12,10 @@ import {
   selectInstance,
   selectInstances,
 } from "~/shared/nano-states";
-import { getInstanceSelectionUpdate } from "~/shared/instance-utils/selection";
+import {
+  getCanvasClickSelector,
+  getInstanceSelectionUpdate,
+} from "~/shared/instance-utils/selection";
 import { $props } from "~/shared/sync/data-stores";
 import { $instances } from "~/shared/sync/data-stores";
 import { $ephemeralStyles } from "~/canvas/stores";
@@ -71,11 +74,17 @@ const handleSelect = (
     return;
   }
 
-  const instanceSelector = getInstanceSelectorFromElement(element);
+  const clickedSelector = getInstanceSelectorFromElement(element);
 
-  if (instanceSelector === undefined) {
+  if (clickedSelector === undefined) {
     return;
   }
+
+  const instanceSelector = getCanvasClickSelector({
+    clickedSelector,
+    selectedSelector: $selectedInstanceSelector.get(),
+    instances: $instances.get(),
+  });
 
   // Prevent unnecessary updates (2 clicks are registered before a double click)
   if ($textEditingInstanceSelector.get() !== undefined) {
@@ -157,11 +166,17 @@ const handleEdit = (
       $textEditingInstanceSelector.set(undefined);
     }
 
-    // Select the instance when no editable parent is found
-    if (!shallowEqual(instanceSelector, $selectedInstanceSelector.get())) {
-      selectInstance(instanceSelector);
+    // Select the instance when no editable parent is found,
+    // or the Custom Slot copy around it to fill in the copy's values
+    const selector = getCanvasClickSelector({
+      clickedSelector: instanceSelector,
+      selectedSelector: $selectedInstanceSelector.get(),
+      instances,
+    });
+    if (!shallowEqual(selector, $selectedInstanceSelector.get())) {
+      selectInstance(selector);
     }
-    rangeAnchorSelector.current = instanceSelector;
+    rangeAnchorSelector.current = selector;
 
     return;
   }

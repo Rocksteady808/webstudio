@@ -1,4 +1,8 @@
-import { ROOT_INSTANCE_ID, type Instances } from "@webstudio-is/sdk";
+import {
+  ROOT_INSTANCE_ID,
+  customSlotComponent,
+  type Instances,
+} from "@webstudio-is/sdk";
 import {
   areInstanceSelectorsEqual,
   isDescendantOrSelf,
@@ -224,4 +228,36 @@ export const getContextMenuSelectedInstanceSelectors = ({
     areInstanceSelectorsEqual(selector, clickedSelector)
   );
   return isClickedAlreadySelected ? selectedSelectors : [clickedSelector];
+};
+
+/**
+ * Like Figma and Webflow components: clicking inside a Custom Slot copy first
+ * selects the copy, and clicking again goes inside it. A copy counts as
+ * entered while the selection is the copy or anything inside it.
+ */
+export const getCanvasClickSelector = ({
+  clickedSelector,
+  selectedSelector,
+  instances,
+}: {
+  clickedSelector: InstanceSelector;
+  selectedSelector: undefined | InstanceSelector;
+  instances: Instances;
+}) => {
+  // walk from the page down to the clicked element, outermost copy first
+  for (let index = clickedSelector.length - 1; index > 0; index -= 1) {
+    if (
+      instances.get(clickedSelector[index])?.component !== customSlotComponent
+    ) {
+      continue;
+    }
+    const copySelector = clickedSelector.slice(index);
+    if (
+      selectedSelector === undefined ||
+      isDescendantOrSelf(selectedSelector, copySelector) === false
+    ) {
+      return copySelector;
+    }
+  }
+  return clickedSelector;
 };

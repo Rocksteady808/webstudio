@@ -1,4 +1,9 @@
-import { type Instance, type WebstudioFragment } from "@webstudio-is/sdk";
+import {
+  createCustomSlotFragment,
+  customSlotComponent,
+  type Instance,
+  type WebstudioFragment,
+} from "@webstudio-is/sdk";
 import type { GeneratedTemplateMeta } from "@webstudio-is/template";
 import { throwBuilderRuntimeError } from "./errors";
 
@@ -33,6 +38,10 @@ export const createComponentTemplateFragment = ({
   getFallbackError?: (component: Instance["component"]) => string | undefined;
   createId: () => string;
 }): WebstudioFragment => {
+  // a static template would reuse one Fragment id across every insertion
+  if (component === customSlotComponent) {
+    return createCustomSlotFragment({ createId });
+  }
   const template = templates.get(component)?.template;
   if (template !== undefined) {
     return template;

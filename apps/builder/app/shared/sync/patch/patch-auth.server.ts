@@ -10,6 +10,7 @@ import {
 } from "@webstudio-is/project-build/runtime";
 import {
   type Breakpoint,
+  type DataSource,
   type Prop,
   type StyleSource,
 } from "@webstudio-is/sdk";
@@ -126,6 +127,7 @@ export const createContentModeCapabilities = (build: {
   styleSourceSelections: string;
   styles: string;
   breakpoints: string;
+  dataSources?: string;
 }) => {
   return getContentModeCapabilities({
     instances: parseInstanceData(build.instances),
@@ -137,6 +139,10 @@ export const createContentModeCapabilities = (build: {
     ),
     styles: parseStyles(build.styles),
     breakpoints: parseData<Breakpoint>(build.breakpoints),
+    dataSources:
+      build.dataSources === undefined
+        ? undefined
+        : parseData<DataSource>(build.dataSources),
   });
 };
 

@@ -4027,6 +4027,11 @@ export const hiddenMcpOperationCommands = new Set<string>([
   // Hydrated Map-backed sourceData is available only to typed API callers.
   // MCP callers use duplicate-page or serializable page-transfer workflows.
   "copy-page",
+  // Custom Slot properties stay Builder-only while the feature is flagged.
+  "create-custom-slot-field",
+  "update-custom-slot-field",
+  "delete-custom-slot-field",
+  "set-custom-slot-field-value",
 ]);
 
 const mcpOperationSchemaInlineSizes = new Map<string, number>([

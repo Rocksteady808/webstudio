@@ -2,6 +2,7 @@ import type { Instance } from "@webstudio-is/sdk";
 import { SettingsSection } from "./settings-section";
 import { PropsSectionContainer } from "./props-section/props-section";
 import { VariablesSection } from "./variables-section";
+import { CustomSlotPropertiesSection } from "./custom-slot-properties-section";
 import {
   Box,
   Flex,
@@ -29,6 +30,8 @@ export const SettingsPanel = ({
   return (
     <Box css={{ pt: theme.spacing[5] }}>
       <SettingsSection />
+
+      <CustomSlotPropertiesSection />
 
       <PropsSectionContainer
         selectedInstance={selectedInstance}

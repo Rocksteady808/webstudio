@@ -33,11 +33,26 @@ import {
   Text,
   Tooltip,
   InputErrorsTooltip,
+  InputField,
   theme,
 } from "@webstudio-is/design-system";
 import { getExpressionIdentifiers } from "@webstudio-is/expression";
+import {
+  customSlotComponent,
+  decodeDataVariableId,
+  getCustomSlotContentRootId,
+  type CustomSlotFieldType,
+  type CustomSlotFieldValue,
+} from "@webstudio-is/sdk";
+import {
+  findCustomSlotConnection,
+  toCustomSlotFieldName,
+} from "@webstudio-is/project-build/runtime";
+import { $dataSources, $instances } from "~/shared/sync/data-stores";
+import { executeRuntimeMutation } from "~/shared/instance-utils/data";
+import { humanizeString } from "~/shared/string-utils";
 import { getExpressionErrorMessages } from "@webstudio-is/project-build/runtime";
-import { $isDesignMode } from "~/shared/nano-states";
+import { $isDesignMode, $selectedInstance } from "~/shared/nano-states";
 import {
   computeExpressionWithinScope,
   encodeDataVariableName,
@@ -55,20 +70,155 @@ export const evaluateExpressionWithinScope = async (
   scope: Record<string, unknown>
 ) => computeExpressionWithinScope(expression, scope);
 
+/** What a property created from this setting should look like. */
+export type CustomSlotFieldHint = {
+  type?: CustomSlotFieldType;
+  defaultValue?: CustomSlotFieldValue;
+};
+
+const toLiteralDefault = (value: unknown) =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean"
+    ? { type: "literal" as const, value }
+    : undefined;
+
+/**
+ * Inside a Custom Slot, settings connect to component properties the way
+ * Webflow's "Connect to property" works, without writing expressions.
+ */
+const CustomSlotConnectSection = ({
+  aliases,
+  value,
+  currentValue,
+  fieldHint,
+  onConnect,
+}: {
+  aliases: Map<string, string>;
+  value?: string;
+  currentValue: unknown;
+  fieldHint?: CustomSlotFieldHint;
+  onConnect: (expression: string) => void;
+}) => {
+  const dataSources = useStore($dataSources);
+  const selectedInstance = useStore($selectedInstance);
+  const [newLabel, setNewLabel] = useState("");
+  const instances = useStore($instances);
+  const connection = useMemo(
+    () =>
+      findCustomSlotConnection({
+        dataSources,
+        availableDataSourceIds: Array.from(aliases.keys()).flatMap(
+          (identifier) => decodeDataVariableId(identifier) ?? []
+        ),
+        // a copy's own values cannot connect to the properties they fill in,
+        // but a nested copy connects to the component it is inside
+        excludeFragmentId:
+          selectedInstance?.component === customSlotComponent
+            ? getCustomSlotContentRootId(instances, selectedInstance.id)
+            : undefined,
+      }),
+    [aliases, dataSources, instances, selectedInstance]
+  );
+  if (connection === undefined) {
+    return;
+  }
+  const newName = toCustomSlotFieldName(newLabel);
+  const createProperty = () => {
+    if (newName.length === 0) {
+      return;
+    }
+    const mutation = executeRuntimeMutation({
+      id: "customSlots.createField",
+      input: {
+        fragmentId: connection.fragmentId,
+        name: newName,
+        type: fieldHint?.type,
+        defaultValue: fieldHint?.defaultValue ?? toLiteralDefault(currentValue),
+      },
+    });
+    if (mutation !== undefined) {
+      onConnect(mutation.result.expression);
+      setNewLabel("");
+    }
+  };
+  return (
+    <Box css={{ paddingBottom: theme.spacing[5] }}>
+      <PanelContent as={Flex} gap="1">
+        <Text variant="labels">Connect to property</Text>
+        <Tooltip
+          variant="wrapped"
+          content="Connected settings show each copy's own value. Fill in values by selecting a copy of this component."
+        >
+          <InfoCircleIcon
+            color={cssVar("--foreground-secondary")}
+            tabIndex={0}
+          />
+        </Tooltip>
+      </PanelContent>
+      <CssValueListArrowFocus>
+        {connection.fields
+          // variants pick styles, they have no value to connect
+          .filter((field) => field.type !== "variant")
+          .map((field, index) => {
+            const expression = connection.getExpression(field.name);
+            return (
+              <CssValueListItem
+                key={field.id}
+                id={field.id}
+                index={index}
+                label={<Label truncate>{humanizeString(field.name)}</Label>}
+                active={value?.trim() === expression}
+                onClick={() => onConnect(expression)}
+              />
+            );
+          })}
+      </CssValueListArrowFocus>
+      <PanelContent as={Flex} gap="1" css={{ pt: theme.spacing[3] }}>
+        <InputField
+          placeholder="New property, e.g. Link"
+          value={newLabel}
+          onChange={(event) => setNewLabel(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              createProperty();
+            }
+          }}
+          css={{ flexGrow: 1 }}
+        />
+        <Button
+          type="button"
+          prefix={<PlusIcon />}
+          disabled={newName.length === 0}
+          onClick={createProperty}
+        >
+          Create
+        </Button>
+      </PanelContent>
+    </Box>
+  );
+};
+
 const BindingPanel = ({
   scope,
   aliases,
   valueError,
   value,
+  currentValue,
+  fieldHint,
   onChange,
   onSave,
+  onConnect,
 }: {
   scope: Record<string, unknown>;
   aliases: Map<string, string>;
   valueError?: string;
   value?: string;
+  currentValue?: unknown;
+  fieldHint?: CustomSlotFieldHint;
   onChange: () => void;
   onSave: (value: string, invalid: boolean) => void;
+  onConnect: (expression: string) => void;
 }) => {
   const editorApiRef = useRef<undefined | EditorApi>(undefined);
   const normalizedValue = normalizeEditorValue(value);
@@ -103,6 +253,13 @@ const BindingPanel = ({
         width: theme.spacing[30],
       }}
     >
+      <CustomSlotConnectSection
+        aliases={aliases}
+        value={value}
+        currentValue={currentValue}
+        fieldHint={fieldHint}
+        onConnect={onConnect}
+      />
       <Box css={{ paddingBottom: theme.spacing[5] }}>
         <PanelContent as={Flex} gap="1">
           <Text variant="labels">Variables</Text>
@@ -326,11 +483,13 @@ export const BindingPopover = ({
   variant,
   validate,
   value,
+  fieldHint,
   onChange,
   onRemove,
 }: {
   scope: Record<string, unknown>;
   aliases: Map<string, string>;
+  fieldHint?: CustomSlotFieldHint;
   variant: BindingVariant;
   validate?: (value: unknown) => undefined | string;
   value?: string;
@@ -414,6 +573,14 @@ export const BindingPopover = ({
           aliases={aliases}
           valueError={valueError}
           value={normalizedValue}
+          currentValue={evaluatedValue}
+          fieldHint={fieldHint}
+          onConnect={(expression) => {
+            hasUnsavedChange.current = false;
+            preventedClosing.current = false;
+            onChange(expression);
+            onOpenChange(false);
+          }}
           onChange={() => {
             hasUnsavedChange.current = true;
           }}

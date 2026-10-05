@@ -236,6 +236,7 @@ export const CodeControl = ({
         }
         onChangeValue={(value) => onChange({ type: "string", value })}
         onChangeExpression={(value) => onChange({ type: "expression", value })}
+        fieldHint={{ type: "html" }}
         onRemove={(value) => {
           if (behavior) {
             const fixedValue = behavior.getFixedValue(value, label);

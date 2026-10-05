@@ -29,6 +29,7 @@ import {
   $propValuesByInstanceSelector,
   $variableValuesByInstanceSelector,
   subscribeResourceRequestPlan,
+  __testing__ as propsTesting,
 } from "./props";
 import { $dataSourceVariables } from "./variables";
 import { $selectedPageId } from "./pages";
@@ -209,6 +210,513 @@ const setBoxInstance = (id: Instance["id"]) => {
     toMap([{ id, type: "instance", component: "Box", children: [] }])
   );
 };
+
+test("Custom Slot link properties use page links and global variables", async () => {
+  const componentIdentifier = encodeDataSourceVariable("component-parameter");
+  const globalIdentifier = encodeDataSourceVariable("global-link");
+  $instances.set(
+    toMap<Instance>([
+      {
+        id: "body",
+        type: "instance",
+        component: "Body",
+        children: [
+          { type: "id", value: "card-a" },
+          { type: "id", value: "card-b" },
+        ],
+      },
+      {
+        id: "card-a",
+        type: "instance",
+        component: customSlotComponent,
+        children: [{ type: "id", value: "fragment" }],
+      },
+      {
+        id: "card-b",
+        type: "instance",
+        component: customSlotComponent,
+        children: [{ type: "id", value: "fragment" }],
+      },
+      {
+        id: "fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "button" }],
+      },
+      {
+        id: "button",
+        type: "instance",
+        component: "ws:element",
+        tag: "a",
+        children: [],
+      },
+    ])
+  );
+  $props.set(
+    toMap([
+      {
+        id: "href",
+        instanceId: "button",
+        name: "href",
+        type: "expression" as const,
+        value: `${componentIdentifier}.link`,
+      },
+    ])
+  );
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "global-link",
+        type: "variable",
+        name: "Contact URL",
+        scopeInstanceId: ROOT_INSTANCE_ID,
+        value: { type: "string", value: "https://example.com/contact" },
+      },
+      {
+        id: "component-parameter",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "fragment",
+      },
+      {
+        id: "schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "fragment",
+        value: {
+          type: "json",
+          value: [{ id: "link-id", name: "link", type: "link" }],
+        },
+      },
+      {
+        id: "values-a",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "card-a",
+        value: {
+          type: "json",
+          value: { "link-id": { type: "page", value: "pageId" } },
+        },
+      },
+      {
+        id: "values-b",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "card-b",
+        value: {
+          type: "json",
+          value: { "link-id": { type: "expression", value: globalIdentifier } },
+        },
+      },
+    ])
+  );
+  selectPageRoot("body");
+  await vi.waitFor(() => {
+    const values = $propValuesByInstanceSelector.get();
+    expect(
+      values
+        .get(getInstanceKey(["button", "fragment", "card-a", "body"]))
+        ?.get("href")
+    ).toBe("/");
+    expect(
+      values
+        .get(getInstanceKey(["button", "fragment", "card-b", "body"]))
+        ?.get("href")
+    ).toBe("https://example.com/contact");
+  });
+});
+
+test("Custom Slot image properties resolve assets like a regular Image", async () => {
+  const componentIdentifier = encodeDataSourceVariable("component-parameter");
+  $assets.set(
+    new Map([
+      [
+        "photo",
+        {
+          id: "photo",
+          projectId: "project",
+          name: "photo_hash.jpg",
+          type: "image",
+          format: "jpg",
+          size: 1,
+          createdAt: "",
+          description: "",
+          meta: { width: 10, height: 10 },
+        },
+      ],
+    ])
+  );
+  $instances.set(
+    toMap<Instance>([
+      {
+        id: "body",
+        type: "instance",
+        component: "Body",
+        children: [{ type: "id", value: "card" }],
+      },
+      {
+        id: "card",
+        type: "instance",
+        component: customSlotComponent,
+        children: [{ type: "id", value: "fragment" }],
+      },
+      {
+        id: "fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "image" }],
+      },
+      { id: "image", type: "instance", component: "Image", children: [] },
+    ])
+  );
+  $props.set(
+    toMap([
+      {
+        id: "src",
+        instanceId: "image",
+        name: "src",
+        type: "expression" as const,
+        value: `${componentIdentifier}.image`,
+      },
+    ])
+  );
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "component-parameter",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "fragment",
+      },
+      {
+        id: "schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "fragment",
+        value: {
+          type: "json",
+          value: [{ id: "image-id", name: "image", type: "image" }],
+        },
+      },
+      {
+        id: "values",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "card",
+        value: {
+          type: "json",
+          value: { "image-id": { type: "asset", value: "photo" } },
+        },
+      },
+    ])
+  );
+  selectPageRoot("body");
+  await vi.waitFor(() => {
+    expect(
+      $propValuesByInstanceSelector
+        .get()
+        .get(getInstanceKey(["image", "fragment", "card", "body"]))
+        ?.get("src")
+    ).toBe("/cgi/asset/photo_hash.jpg");
+  });
+});
+
+test("a nested Custom Slot shows each parent copy's own values", async () => {
+  const cardComponent = encodeDataSourceVariable("card-component");
+  const buttonComponent = encodeDataSourceVariable("button-component");
+  $instances.set(
+    toMap<Instance>([
+      {
+        id: "body",
+        type: "instance",
+        component: "Body",
+        children: [
+          { type: "id", value: "card-a" },
+          { type: "id", value: "card-b" },
+        ],
+      },
+      ...["card-a", "card-b"].map(
+        (id): Instance => ({
+          id,
+          type: "instance",
+          component: customSlotComponent,
+          children: [{ type: "id", value: "card-fragment" }],
+        })
+      ),
+      {
+        id: "card-fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "nested-button" }],
+      },
+      {
+        id: "nested-button",
+        type: "instance",
+        component: customSlotComponent,
+        children: [{ type: "id", value: "button-fragment" }],
+      },
+      {
+        id: "button-fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "label" }],
+      },
+      {
+        id: "label",
+        type: "instance",
+        component: "Text",
+        children: [{ type: "expression", value: `${buttonComponent}.label` }],
+      },
+    ])
+  );
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "card-component",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "card-fragment",
+      },
+      {
+        id: "card-schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "card-fragment",
+        value: {
+          type: "json",
+          value: [{ id: "button-label-id", name: "buttonLabel" }],
+        },
+      },
+      ...(["Read more", "Buy now"] as const).map(
+        (label, index): DataSource => ({
+          id: `card-values-${index}`,
+          type: "variable",
+          name: customSlotValuesVariable,
+          scopeInstanceId: index === 0 ? "card-a" : "card-b",
+          value: {
+            type: "json",
+            value: { "button-label-id": { type: "literal", value: label } },
+          },
+        })
+      ),
+      {
+        id: "button-component",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "button-fragment",
+      },
+      {
+        id: "button-schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "button-fragment",
+        value: { type: "json", value: [{ id: "label-id", name: "label" }] },
+      },
+      // the nested button's label is connected to the card's property
+      {
+        id: "button-values",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "nested-button",
+        value: {
+          type: "json",
+          value: {
+            "label-id": {
+              type: "expression",
+              value: `${cardComponent}.buttonLabel`,
+            },
+          },
+        },
+      },
+    ])
+  );
+  selectPageRoot("body");
+  const getLabel = (card: string) =>
+    $propValuesByInstanceSelector
+      .get()
+      .get(
+        getInstanceKey([
+          "label",
+          "button-fragment",
+          "nested-button",
+          "card-fragment",
+          card,
+          "body",
+        ])
+      )
+      ?.get(textContentAttribute);
+  await vi.waitFor(() => {
+    expect(getLabel("card-a")).toBe("Read more");
+    expect(getLabel("card-b")).toBe("Buy now");
+  });
+});
+
+test("a parent copy's override changes only its own nested copy", async () => {
+  const buttonComponent = encodeDataSourceVariable("button-component");
+  $instances.set(
+    toMap<Instance>([
+      {
+        id: "body",
+        type: "instance",
+        component: "Body",
+        children: [
+          { type: "id", value: "card-a" },
+          { type: "id", value: "card-b" },
+        ],
+      },
+      ...["card-a", "card-b"].map(
+        (id): Instance => ({
+          id,
+          type: "instance",
+          component: customSlotComponent,
+          children: [{ type: "id", value: "card-fragment" }],
+        })
+      ),
+      {
+        id: "card-fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "nested-button" }],
+      },
+      {
+        id: "nested-button",
+        type: "instance",
+        component: customSlotComponent,
+        children: [{ type: "id", value: "button-fragment" }],
+      },
+      {
+        id: "button-fragment",
+        type: "instance",
+        component: "Fragment",
+        children: [{ type: "id", value: "label" }],
+      },
+      {
+        id: "label",
+        type: "instance",
+        component: "Text",
+        children: [{ type: "expression", value: `${buttonComponent}.label` }],
+      },
+    ])
+  );
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "card-component",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "card-fragment",
+      },
+      {
+        id: "card-schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "card-fragment",
+        value: { type: "json", value: [] },
+      },
+      {
+        id: "button-component",
+        type: "parameter",
+        name: customSlotComponentVariable,
+        scopeInstanceId: "button-fragment",
+      },
+      {
+        id: "button-schema",
+        type: "variable",
+        name: customSlotSchemaVariable,
+        scopeInstanceId: "button-fragment",
+        value: { type: "json", value: [{ id: "label-id", name: "label" }] },
+      },
+      {
+        id: "button-values",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "nested-button",
+        value: {
+          type: "json",
+          value: { "label-id": { type: "literal", value: "Shared" } },
+        },
+      },
+      {
+        id: "card-a-overrides",
+        type: "variable",
+        name: "__customSlotOverrides",
+        scopeInstanceId: "card-a",
+        value: {
+          type: "json",
+          value: {
+            "nested-button": {
+              "label-id": { type: "literal", value: "Read more" },
+            },
+          },
+        },
+      },
+    ])
+  );
+  selectPageRoot("body");
+  const getLabel = (card: string) =>
+    $propValuesByInstanceSelector
+      .get()
+      .get(
+        getInstanceKey([
+          "label",
+          "button-fragment",
+          "nested-button",
+          "card-fragment",
+          card,
+          "body",
+        ])
+      )
+      ?.get(textContentAttribute);
+  await vi.waitFor(() => {
+    expect(getLabel("card-a")).toBe("Read more");
+    expect(getLabel("card-b")).toBe("Shared");
+  });
+});
+
+test("editing ordinary variables does not touch Custom Slot rendering", () => {
+  const { $customSlotDataSources } = propsTesting;
+  const unsubscribe = $customSlotDataSources.listen(() => {});
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "title",
+        type: "variable",
+        name: "title",
+        scopeInstanceId: ROOT_INSTANCE_ID,
+        value: { type: "string", value: "Hello" },
+      },
+    ])
+  );
+  const before = $customSlotDataSources.get();
+  expect(before.size).toBe(0);
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "title",
+        type: "variable",
+        name: "title",
+        scopeInstanceId: ROOT_INSTANCE_ID,
+        value: { type: "string", value: "Changed" },
+      },
+    ])
+  );
+  expect($customSlotDataSources.get()).toBe(before);
+  // Custom Slot data still updates
+  $dataSources.set(
+    toMap<DataSource>([
+      {
+        id: "values",
+        type: "variable",
+        name: customSlotValuesVariable,
+        scopeInstanceId: "card",
+        value: { type: "json", value: {} },
+      },
+    ])
+  );
+  expect($customSlotDataSources.get()).not.toBe(before);
+  expect($customSlotDataSources.get().has("values")).toBe(true);
+  unsubscribe();
+});
 
 const selectPageRoot = (
   rootInstanceId: Instance["id"],

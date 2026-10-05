@@ -16,7 +16,10 @@ import {
   showAttribute,
   standardAttributesToReactProps,
 } from "@webstudio-is/react-sdk";
-import { showAttributeMeta } from "@webstudio-is/project-build/runtime";
+import {
+  isCustomSlotInternalVariable,
+  showAttributeMeta,
+} from "@webstudio-is/project-build/runtime";
 import {
   encodeDataSourceVariable,
   SYSTEM_VARIABLE_ID,
@@ -278,7 +281,10 @@ export const $selectedInstanceScope = computed(
         if (dataSourceId === SYSTEM_VARIABLE_ID) {
           dataSource = systemParameter;
         }
-        if (dataSource === undefined) {
+        if (
+          dataSource === undefined ||
+          isCustomSlotInternalVariable(dataSource)
+        ) {
           continue;
         }
         const name = encodeDataSourceVariable(dataSourceId);

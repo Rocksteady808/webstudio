@@ -26,11 +26,16 @@ import {
 import type { CssProperty, UnitValue } from "@webstudio-is/css-engine";
 import type { TokenPermissions } from "@webstudio-is/authorization-token";
 import type { DragStartPayload } from "~/canvas/shared/use-drag-drop";
-import { type InstanceSelector } from "@webstudio-is/project-build/runtime";
+import {
+  getCustomSlotActiveVariantState,
+  type InstanceSelector,
+} from "@webstudio-is/project-build/runtime";
 import type { ChildrenOrientation } from "@webstudio-is/design-system";
 import { $selectedInstance, $selectedInstanceSelector } from "./instances";
 import { getPermissions } from "../permissions";
 import {
+  $dataSources,
+  $instances,
   $project,
   $publisherHost,
   $props,
@@ -72,9 +77,18 @@ export const $selectedStyleSources = atom(
   new Map<Instance["id"], StyleSource["id"]>()
 );
 export const $selectedStyleState = atom<StyleDecl["state"]>();
-// reset style state whenever selected instance change
-onSet($selectedInstanceSelector, () => {
-  $selectedStyleState.set(undefined);
+// reset style state whenever selected instance change; inside a Custom Slot
+// copy that uses a variant, styling edits that variant like Webflow or Figma
+onSet($selectedInstanceSelector, ({ newValue }) => {
+  $selectedStyleState.set(
+    newValue === undefined
+      ? undefined
+      : getCustomSlotActiveVariantState({
+          instances: $instances.get(),
+          dataSources: $dataSources.get(),
+          instanceSelector: newValue,
+        })
+  );
 });
 
 /**

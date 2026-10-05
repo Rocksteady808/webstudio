@@ -867,3 +867,45 @@ describe("simulateConditionBreakpoints", () => {
     expect(result.get("empty")).toEqual(emptyCondition);
   });
 });
+
+describe("Custom Slot variant states", () => {
+  const box: Instance = {
+    type: "instance",
+    id: "box",
+    component: "Box",
+    children: [],
+  };
+  const hoverStyle = createStyleDecl({
+    styleSourceId: "local",
+    state: ':is([data-ws-variant~="reverse"] *):hover',
+    property: "color",
+    value: { type: "keyword", value: "red" },
+  });
+  const compute = (selectedStyleState: string) =>
+    computeInstanceStyles({
+      selectedInstance: box,
+      selectedStyleState,
+      breakpoints: new Map([["base", { id: "base", label: "Base" }]]),
+      styleSourceSelections: new Map([["box", { values: ["local"] }]]),
+      styles: new Map([["hover", hoverStyle]]),
+    });
+
+  test("a variant alone is not previewed, it already applies", () => {
+    expect(compute(':is([data-ws-variant~="reverse"] *)')).toBeUndefined();
+  });
+
+  test("a variant's hover previews only in copies using the variant", () => {
+    const sheet = createTestSheet();
+    renderStateStyles({
+      instanceStyles: compute(':is([data-ws-variant~="reverse"] *):hover'),
+      sheet,
+      transformValue: mockTransformValue,
+      toStyleValue: mockToStyleValue,
+    });
+    expect(sheet.cssText).toContain(
+      `[data-ws-variant~="reverse"] [data-ws-id="box"]`
+    );
+    expect(sheet.cssText).toContain("color: red");
+    expect(sheet.cssText).not.toContain(":hover");
+  });
+});

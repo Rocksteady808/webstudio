@@ -566,6 +566,13 @@ export const UrlControl = ({
               onChange({ type: "string", value: String(value) })
             }
             renderControl={() => control}
+            fieldHint={{
+              type: "link",
+              defaultValue:
+                prop?.type === "page"
+                  ? { type: "page", value: prop.value }
+                  : undefined,
+            }}
           />
         )}
       />

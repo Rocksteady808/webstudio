@@ -61,6 +61,7 @@ import {
   type Pages,
   type ComponentBuildContribution,
   isPublishedDeployment,
+  resolveCustomSlotPageValues,
 } from "@webstudio-is/sdk";
 import { migratePages } from "@webstudio-is/project-migrations/pages";
 import {
@@ -1692,7 +1693,17 @@ export const prebuild = async (options: {
     const pageFontAssets = fontAssetsByPage[page.id];
     const pageBackgroundImageAssets = backgroundImageAssetsByPage[page.id];
 
-    const dataSources = new Map(pageData.build.dataSources);
+    // Custom Slot page links become paths, like regular page link props
+    const dataSources = resolveCustomSlotPageValues({
+      dataSources: new Map(pageData.build.dataSources),
+      pages,
+      props: siteData.build.props.map(([_id, prop]) => prop),
+      // same URL normalizeProps gives a regular Image src asset
+      resolveAsset: (assetId) => {
+        const asset = siteData.assets.find((asset) => asset.id === assetId);
+        return asset === undefined ? undefined : `${assetBaseUrl}${asset.name}`;
+      },
+    });
     const resources = new Map(pageData.build.resources);
     replaceFormActionsWithResources({
       instances,

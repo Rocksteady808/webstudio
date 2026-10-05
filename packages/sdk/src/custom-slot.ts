@@ -6,6 +6,30 @@ export const customSlotSchemaVariable = "__customSlotSchema";
 export const customSlotValuesVariable = "__customSlotValues";
 export const customSlotComponentVariable = "component";
 
+/**
+ * Tags a copy can render as, so it can be the list item, article or section
+ * itself instead of adding a wrapper div. Written into generated code, so
+ * only known tags are allowed.
+ */
+export const customSlotTags = [
+  "div",
+  "article",
+  "section",
+  "aside",
+  "header",
+  "footer",
+  "nav",
+  "main",
+  "li",
+  "figure",
+  "span",
+] as const;
+
+export type CustomSlotTag = (typeof customSlotTags)[number];
+
+export const getCustomSlotTag = (tag: undefined | string): CustomSlotTag =>
+  customSlotTags.find((item) => item === tag) ?? "div";
+
 /** A Custom Slot occurrence points at one shared Fragment root. */
 export const getCustomSlotContentRootId = (
   instances: Instances,
@@ -26,17 +50,59 @@ export const getCustomSlotContentRootId = (
   return rootId;
 };
 
+type DataSourceIndex = {
+  size: number;
+  ids: Map<string, DataSource["id"]>;
+};
+
+// one index per data sources map, so rendering many copies does not
+// rescan every data source in the project for each copy
+const dataSourceIndexes = new WeakMap<DataSources, DataSourceIndex>();
+
+const getIndexKey = (
+  scopeInstanceId: undefined | Instance["id"],
+  name: DataSource["name"]
+) => `${scopeInstanceId ?? ""}\u0000${name}`;
+
+const buildDataSourceIndex = (dataSources: DataSources) => {
+  const index: DataSourceIndex = { size: dataSources.size, ids: new Map() };
+  for (const dataSource of dataSources.values()) {
+    index.ids.set(
+      getIndexKey(dataSource.scopeInstanceId, dataSource.name),
+      dataSource.id
+    );
+  }
+  dataSourceIndexes.set(dataSources, index);
+  return index;
+};
+
+/**
+ * Builder stores replace the data sources map on every change. Maps edited in
+ * place (runtime drafts, tests) rebuild the index when their size changes or
+ * when an indexed entry no longer matches.
+ */
 export const findCustomSlotDataSource = (
   dataSources: DataSources,
   scopeInstanceId: Instance["id"],
   name: DataSource["name"]
 ): DataSource | undefined => {
-  for (const dataSource of dataSources.values()) {
-    if (
-      dataSource.scopeInstanceId === scopeInstanceId &&
-      dataSource.name === name
-    ) {
-      return dataSource;
-    }
+  const key = getIndexKey(scopeInstanceId, name);
+  let index = dataSourceIndexes.get(dataSources);
+  if (index === undefined || index.size !== dataSources.size) {
+    index = buildDataSourceIndex(dataSources);
   }
+  const id = index.ids.get(key);
+  if (id === undefined) {
+    return;
+  }
+  const dataSource = dataSources.get(id);
+  if (
+    dataSource?.scopeInstanceId === scopeInstanceId &&
+    dataSource.name === name
+  ) {
+    return dataSource;
+  }
+  // the map changed in place without changing size
+  const rebuiltId = buildDataSourceIndex(dataSources).ids.get(key);
+  return rebuiltId === undefined ? undefined : dataSources.get(rebuiltId);
 };

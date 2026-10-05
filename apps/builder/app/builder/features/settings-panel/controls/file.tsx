@@ -81,6 +81,13 @@ export const FileControl = ({
           onRemove={(value) =>
             onChange({ type: "string", value: String(value) })
           }
+          fieldHint={{
+            type: "image",
+            defaultValue:
+              prop?.type === "asset"
+                ? { type: "asset", value: prop.value }
+                : undefined,
+          }}
           renderControl={({ readOnly }) => (
             <UrlInput
               id={id}

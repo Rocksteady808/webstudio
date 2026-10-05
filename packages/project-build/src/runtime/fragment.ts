@@ -23,6 +23,7 @@ import {
   getStyleDeclKey,
   getHomePage,
   portalComponent,
+  isPortalLikeComponent,
   webstudioFragment,
 } from "@webstudio-is/sdk";
 
@@ -509,7 +510,7 @@ const getFragmentInstancesData = (fragment: WebstudioFragment) => {
   const portalContentRootIds = new Set<Instance["id"]>();
   for (const instance of fragment.instances) {
     fragmentInstances.set(instance.id, instance);
-    if (instance.component === portalComponent) {
+    if (isPortalLikeComponent(instance.component)) {
       for (const child of instance.children) {
         if (child.type === "id") {
           portalContentRootIds.add(child.value);

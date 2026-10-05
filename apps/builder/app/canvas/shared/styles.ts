@@ -12,6 +12,8 @@ import {
   type StyleSourceSelection,
   createImageValueTransformer,
   addFontRules,
+  customSlotVariantAttribute,
+  splitCustomSlotVariantState,
 } from "@webstudio-is/sdk";
 import { inflatedAttribute, idAttribute } from "@webstudio-is/react-sdk";
 import { INFLATE_PADDING } from "~/canvas/inflator";
@@ -677,6 +679,11 @@ const computeInstanceStyles = ({
   if (selectedInstance === undefined || selectedStyleState === undefined) {
     return;
   }
+  const variant = splitCustomSlotVariantState(selectedStyleState);
+  // variant styles already apply inside copies using the variant
+  if (variant?.state === "") {
+    return;
+  }
   const styleSources = new Set(
     styleSourceSelections.get(selectedInstance.id)?.values
   );
@@ -691,7 +698,12 @@ const computeInstanceStyles = ({
   }
   return {
     instanceId: selectedInstance.id,
-    selectedState: selectedStyleState,
+    // a variant's hover previews only in copies using that variant,
+    // since every copy shares the selected element
+    ...(variant !== undefined && {
+      scopeSelector: `[${customSlotVariantAttribute}~="${variant.optionId}"] `,
+    }),
+    selectedState: variant?.state ?? selectedStyleState,
     breakpoints: Array.from(breakpoints.values()),
     styles: instanceStyles,
   };
@@ -748,11 +760,17 @@ const renderStateStyles = ({
     sheet.render();
     return;
   }
-  const { instanceId, selectedState, breakpoints, styles } = instanceStyles;
+  const {
+    instanceId,
+    scopeSelector = "",
+    selectedState,
+    breakpoints,
+    styles,
+  } = instanceStyles;
   for (const breakpoint of breakpoints) {
     sheet.addMediaRule(breakpoint.id, breakpoint);
   }
-  const selector = `[${idAttribute}="${instanceId}"]`;
+  const selector = `${scopeSelector}[${idAttribute}="${instanceId}"]`;
   const rule = sheet.addNestingRule(selector);
   const stateSelector = isPseudoElement(selectedState) ? selectedState : "";
   for (const styleDecl of styles) {

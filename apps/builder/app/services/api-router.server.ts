@@ -504,6 +504,7 @@ const createContentModeCapabilitiesFromBuild = (build: CompactBuild) => {
     styleSourceSelections: state.styleSourceSelections,
     styles: state.styles,
     breakpoints: state.breakpoints,
+    dataSources: state.dataSources,
   });
 };
 
