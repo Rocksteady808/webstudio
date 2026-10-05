@@ -22,11 +22,11 @@ import {
   descendantComponent,
   getIndexesWithinAncestors,
   elementComponent,
-  customSlotComponent,
-  getCustomSlotCopy,
-  getCustomSlotTag,
-  customSlotVariantAttribute,
-  getCustomSlotVariantAttribute,
+  builderComponent,
+  getBuilderComponentCopy,
+  getBuilderComponentTag,
+  builderComponentChoiceAttribute,
+  getBuilderComponentChoiceAttribute,
 } from "@webstudio-is/sdk";
 import { transpileExpression } from "@webstudio-is/expression";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
@@ -207,11 +207,11 @@ export const generateJsxElement = ({
   if (index !== undefined) {
     generatedProps += `\n${indexProperty}="${index}"`;
   }
-  // Custom Slot copies render their tag directly instead of as a prop
+  // Builder component copies render their tag directly instead of as a prop
   if (
     instance.tag !== undefined &&
     instance.component !== elementComponent &&
-    instance.component !== customSlotComponent
+    instance.component !== builderComponent
   ) {
     generatedProps += `\n${tagProperty}=${JSON.stringify(instance.tag)}`;
   }
@@ -374,8 +374,8 @@ export const generateJsxElement = ({
     instance.component === blockBodyComponent
   ) {
     generatedElement += children;
-  } else if (instance.component === customSlotComponent) {
-    const tag = getCustomSlotTag(instance.tag);
+  } else if (instance.component === builderComponent) {
+    const tag = getBuilderComponentTag(instance.tag);
     // without a tag the copy adds no box, keeping the page structure
     generatedElement +=
       tag === undefined
@@ -450,7 +450,7 @@ export const generateJsxChildren = ({
   excludePlaceholders,
   publishedContentBlocks,
   contentBodyOverride,
-  customSlotAncestors = [],
+  builderComponentAncestors = [],
 }: {
   scope: Scope;
   metas: Map<Instance["component"], WsComponentMeta>;
@@ -470,8 +470,8 @@ export const generateJsxChildren = ({
     instanceId: Instance["id"];
     children: Instance["children"];
   }>;
-  /** Custom Slot copies this content is shown inside, innermost first */
-  customSlotAncestors?: readonly Instance["id"][];
+  /** Builder component copies this content is shown inside, innermost first */
+  builderComponentAncestors?: readonly Instance["id"][];
 }) => {
   let generatedChildren = "";
   for (const child of children) {
@@ -503,13 +503,13 @@ export const generateJsxChildren = ({
       if (instance === undefined) {
         continue;
       }
-      if (instance.component === customSlotComponent) {
+      if (instance.component === builderComponent) {
         // a nested copy uses the overrides its parent copies set for it
-        const copy = getCustomSlotCopy({
+        const copy = getBuilderComponentCopy({
           instances,
           dataSources,
           slotId: instance.id,
-          enclosingCopyIds: customSlotAncestors,
+          enclosingCopyIds: builderComponentAncestors,
         });
         if (copy === undefined) {
           continue;
@@ -534,7 +534,10 @@ export const generateJsxChildren = ({
           return `${JSON.stringify(field.name)}: ${expression}`;
         });
         const sharedChildren = generateJsxChildren({
-          customSlotAncestors: [instance.id, ...customSlotAncestors],
+          builderComponentAncestors: [
+            instance.id,
+            ...builderComponentAncestors,
+          ],
           scope,
           metas,
           tagsOverrides,
@@ -551,22 +554,22 @@ export const generateJsxChildren = ({
           contentBodyOverride,
         });
         const boundChildren = `{((${componentName}: any) => <Fragment>\n${sharedChildren}</Fragment>)({${objectEntries.join(", ")}})}\n`;
-        // the copy's variants decide which variant styles apply inside
-        const variantAttribute = getCustomSlotVariantAttribute(
+        // the copy's choice values decide which value styles apply inside
+        const choiceAttribute = getBuilderComponentChoiceAttribute(
           fields,
           localValues
         );
         const occurrenceProps =
-          variantAttribute.length === 0
+          choiceAttribute.length === 0
             ? props
             : new Map(props).set(
-                `${instance.id}:${customSlotVariantAttribute}`,
+                `${instance.id}:${builderComponentChoiceAttribute}`,
                 {
-                  id: `${instance.id}:${customSlotVariantAttribute}`,
+                  id: `${instance.id}:${builderComponentChoiceAttribute}`,
                   instanceId: instance.id,
-                  name: customSlotVariantAttribute,
+                  name: builderComponentChoiceAttribute,
                   type: "string",
-                  value: variantAttribute,
+                  value: choiceAttribute,
                 }
               );
         generatedChildren += generateJsxElement({
@@ -589,7 +592,7 @@ export const generateJsxChildren = ({
       let generatedInstanceChildren: string;
       if (contentBodyOverride?.instanceId === instance.id) {
         generatedInstanceChildren = generateJsxChildren({
-          customSlotAncestors,
+          builderComponentAncestors,
           classesMap,
           scope,
           metas,
@@ -606,7 +609,7 @@ export const generateJsxChildren = ({
         });
       } else if (publishedContent === undefined) {
         generatedInstanceChildren = generateJsxChildren({
-          customSlotAncestors,
+          builderComponentAncestors,
           classesMap,
           scope,
           metas,
@@ -657,7 +660,7 @@ export const generateJsxChildren = ({
             frontmatter,
           }) => {
             const generated = generateJsxChildren({
-              customSlotAncestors,
+              builderComponentAncestors,
               classesMap,
               scope,
               metas,

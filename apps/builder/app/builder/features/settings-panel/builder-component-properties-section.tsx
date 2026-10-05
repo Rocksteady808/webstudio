@@ -26,27 +26,26 @@ import {
 } from "@webstudio-is/design-system";
 import { EllipsesIcon, PlusIcon, XIcon } from "@webstudio-is/icons";
 import {
-  createId,
-  customSlotComponent,
-  customSlotTags,
+  builderComponent,
+  builderComponentTags,
   getComponentName,
-  getCustomSlotFieldIssue,
-  getCustomSlotTag,
-  getCustomSlotCopyOverrides,
-  getCustomSlotEnclosingCopies,
-  getCustomSlotOverrideTarget,
-  type CustomSlotField,
-  type CustomSlotFieldType,
-  type CustomSlotFieldValue,
+  getBuilderComponentFieldIssue,
+  getBuilderComponentTag,
+  getBuilderComponentCopyOverrides,
+  getBuilderComponentEnclosingCopies,
+  getBuilderComponentOverrideTarget,
+  type BuilderComponentField,
+  type BuilderComponentFieldType,
+  type BuilderComponentFieldValue,
 } from "@webstudio-is/sdk";
 import {
   getContentModeEditableInstanceIds,
-  findBrokenCustomSlotReferences,
-  getCustomSlotProperties,
-  isCustomSlotFieldContentEditable,
+  findBrokenBuilderComponentReferences,
+  getBuilderComponentProperties,
+  isBuilderComponentFieldContentEditable,
   validateHtmlEmbedCode,
-  toCustomSlotFieldName,
-  type CustomSlotProperty,
+  toBuilderComponentFieldName,
+  type BuilderComponentProperty,
 } from "@webstudio-is/project-build/runtime";
 import {
   $isContentMode,
@@ -78,18 +77,18 @@ import { getInstanceLabel } from "~/builder/shared/instance-label";
  * Where edits to the selected copy go. A copy shown inside another copy
  * saves its values on that parent copy only, like a Figma override.
  */
-const $customSlotOverrideTarget = computed(
+const $builderComponentOverrideTarget = computed(
   [$selectedInstanceSelector, $instances],
   (instanceSelector, instances) => {
     const [slotId] = instanceSelector ?? [];
     if (
       instanceSelector === undefined ||
-      instances.get(slotId)?.component !== customSlotComponent
+      instances.get(slotId)?.component !== builderComponent
     ) {
       return;
     }
-    return getCustomSlotOverrideTarget(
-      getCustomSlotEnclosingCopies(instances, instanceSelector),
+    return getBuilderComponentOverrideTarget(
+      getBuilderComponentEnclosingCopies(instances, instanceSelector),
       slotId
     );
   }
@@ -100,7 +99,12 @@ const $customSlotOverrideTarget = computed(
  * the shared design and its properties stay with designers.
  */
 const $isSelectedCopyContentEditable = computed(
-  [$isContentMode, $selectedInstance, $instances, $customSlotOverrideTarget],
+  [
+    $isContentMode,
+    $selectedInstance,
+    $instances,
+    $builderComponentOverrideTarget,
+  ],
   (isContentMode, instance, instances, overrideTarget) => {
     if (isContentMode === false || instance === undefined) {
       return false;
@@ -111,13 +115,18 @@ const $isSelectedCopyContentEditable = computed(
   }
 );
 
-const $selectedCustomSlot = computed(
-  [$selectedInstance, $instances, $dataSources, $customSlotOverrideTarget],
+const $selectedBuilderComponent = computed(
+  [
+    $selectedInstance,
+    $instances,
+    $dataSources,
+    $builderComponentOverrideTarget,
+  ],
   (instance, instances, dataSources, overrideTarget) => {
-    if (instance?.component !== customSlotComponent) {
+    if (instance?.component !== builderComponent) {
       return;
     }
-    const result = getCustomSlotProperties({
+    const result = getBuilderComponentProperties({
       instances,
       dataSources,
       slotId: instance.id,
@@ -131,7 +140,7 @@ const $selectedCustomSlot = computed(
     // inside a parent copy: this copy's own value is the shared value and
     // the parent's override is what this copy changes
     const overrides =
-      getCustomSlotCopyOverrides(dataSources, overrideTarget.ownerSlotId)[
+      getBuilderComponentCopyOverrides(dataSources, overrideTarget.ownerSlotId)[
         overrideTarget.key
       ] ?? {};
     return {
@@ -166,7 +175,7 @@ const PropertyNameForm = ({
   onCancel: () => void;
 }) => {
   const [label, setLabel] = useState(initialLabel);
-  const name = toCustomSlotFieldName(label);
+  const name = toBuilderComponentFieldName(label);
   const description = name.length === 0 ? undefined : describe?.(name);
   const canSubmit = name.length > 0 && description?.error === undefined;
   const submit = () => {
@@ -219,8 +228,9 @@ const describeTakenName = (takenNames: readonly string[]) => (name: string) =>
     ? { error: `${humanizeAttribute(name)} already exists` }
     : {};
 
-const propertyTypes = new Map<CustomSlotFieldType, string>([
+const propertyTypes = new Map<BuilderComponentFieldType, string>([
   ["text", "Text"],
+  ["richText", "Rich text"],
   ["number", "Number"],
   ["boolean", "Boolean"],
   ["choice", "Choice"],
@@ -232,7 +242,7 @@ const propertyTypes = new Map<CustomSlotFieldType, string>([
 
 type NewProperty = {
   name: string;
-  type: CustomSlotFieldType;
+  type: BuilderComponentFieldType;
   choices: string[];
 };
 
@@ -256,13 +266,15 @@ const AddPropertyForm = ({
   onSubmit: (property: NewProperty) => void;
   onCancel: () => void;
 }) => {
-  const [type, setType] = useState<CustomSlotFieldType>("text");
+  const [type, setType] = useState<BuilderComponentFieldType>("text");
   const [choices, setChoices] = useState("");
   return (
     <Flex direction="column" gap="1">
       <Select
         options={Array.from(propertyTypes.keys())}
-        getLabel={(option: CustomSlotFieldType) => propertyTypes.get(option)}
+        getLabel={(option: BuilderComponentFieldType) =>
+          propertyTypes.get(option)
+        }
         value={type}
         onChange={setType}
       />
@@ -292,7 +304,7 @@ const AddPropertyForm = ({
  */
 const getInitialDefault = (
   property: NewProperty
-): undefined | CustomSlotFieldValue => {
+): undefined | BuilderComponentFieldValue => {
   switch (property.type) {
     // images start empty instead of an invalid "" source
     case "image":
@@ -321,7 +333,7 @@ const createProperty = ({
   property: NewProperty;
 }) => {
   executeRuntimeMutation({
-    id: "customSlots.createField",
+    id: "builderComponents.createField",
     input: {
       fragmentId,
       name: property.name,
@@ -332,280 +344,30 @@ const createProperty = ({
   });
 };
 
-// Radix Select cannot use an empty value, so Base has its own id
-const baseVariantId = "__base";
-
-/**
- * Webflow-like variants: each copy picks Base or a variant, and styling
- * anything inside a copy edits the variant that copy uses.
- */
-const VariantSwitcher = ({
-  slotId,
-  fragmentId,
-  variant,
-  canEditVariants,
-}: {
-  slotId: string;
-  fragmentId: string;
-  variant: undefined | CustomSlotProperty;
-  /** content editors pick a variant but cannot create or change them */
-  canEditVariants: boolean;
-}) => {
-  const [mode, setMode] = useState<"idle" | "create" | "rename">("idle");
-  const [name, setName] = useState("");
-  const [renamingId, setRenamingId] = useState<string>();
-  const options = variant?.field.options ?? [];
-  // the design without a variant, renamable like Webflow's Primary variant
-  const baseLabel = variant?.field.baseName ?? "Base";
-  const localValue = variant?.localValue;
-  const selected = options.find(
-    (option) => localValue?.type === "literal" && option.id === localValue.value
-  );
-  const selectVariant = (optionId: undefined | string) => {
-    if (variant === undefined) {
-      return;
-    }
-    setValue(
-      slotId,
-      variant.field.id,
-      optionId === undefined ? null : { type: "literal", value: optionId }
-    );
-  };
-  const createVariant = (variantName: string) => {
-    const option = { id: createId(), name: variantName };
-    const fieldId = variant?.field.id ?? createId();
-    // create the variant and switch this copy to it in one undo step
-    executeRuntimeMutationSequence([
-      variant === undefined
-        ? {
-            id: "customSlots.createField",
-            input: {
-              fragmentId,
-              fieldId,
-              name: "variant",
-              type: "variant",
-              options: [option],
-            },
-          }
-        : {
-            id: "customSlots.updateField",
-            input: {
-              fragmentId,
-              fieldId,
-              options: [...options, option],
-            },
-          },
-      {
-        id: "customSlots.setFieldValue",
-        input: {
-          slotId,
-          fieldId,
-          value: { type: "literal", value: option.id },
-          override: $customSlotOverrideTarget.get(),
-        },
-      },
-    ] as const);
-  };
-  const submit = () => {
-    const trimmed = name.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-    if (mode === "create") {
-      createVariant(trimmed);
-    }
-    if (mode === "rename" && renamingId === baseVariantId) {
-      executeRuntimeMutation(
-        variant === undefined
-          ? {
-              id: "customSlots.createField",
-              input: {
-                fragmentId,
-                name: "variant",
-                type: "variant",
-                options: [],
-                baseName: trimmed,
-              },
-            }
-          : {
-              id: "customSlots.updateField",
-              input: {
-                fragmentId,
-                fieldId: variant.field.id,
-                baseName: trimmed,
-              },
-            }
-      );
-    } else if (mode === "rename" && variant !== undefined) {
-      executeRuntimeMutation({
-        id: "customSlots.updateField",
-        input: {
-          fragmentId,
-          fieldId: variant.field.id,
-          options: options.map((option) =>
-            option.id === renamingId ? { ...option, name: trimmed } : option
-          ),
-        },
-      });
-    }
-    setMode("idle");
-    setName("");
-  };
-  return (
-    <Flex direction="column" gap="1">
-      <Flex align="center" justify="between">
-        <Text variant="titles">Variant</Text>
-        {canEditVariants && (
-          <Flex gap="1">
-            <SmallIconButton
-              aria-label="New variant"
-              icon={<PlusIcon />}
-              onClick={() => {
-                setName("");
-                setMode("create");
-              }}
-            />
-
-            <DropdownMenu modal>
-              <DropdownMenuTrigger asChild>
-                <SmallIconButton
-                  aria-label="Variant menu"
-                  icon={<EllipsesIcon />}
-                />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                css={{ width: theme.spacing[28] }}
-                onCloseAutoFocus={(event) => event.preventDefault()}
-              >
-                <DropdownMenuItem
-                  onSelect={() => {
-                    setName(variant?.field.baseName ?? "");
-                    setRenamingId(baseVariantId);
-                    setMode("rename");
-                  }}
-                >
-                  Rename {baseLabel}
-                </DropdownMenuItem>
-                {options.map((option) => (
-                  <DropdownMenuItem
-                    key={`rename-${option.id}`}
-                    onSelect={() => {
-                      setName(option.name);
-                      setRenamingId(option.id);
-                      setMode("rename");
-                    }}
-                  >
-                    Rename {option.name}
-                  </DropdownMenuItem>
-                ))}
-                {options.map((option) => (
-                  <DropdownMenuItem
-                    key={`delete-${option.id}`}
-                    destructive
-                    onSelect={() =>
-                      variant !== undefined &&
-                      executeRuntimeMutation({
-                        id: "customSlots.updateField",
-                        input: {
-                          fragmentId,
-                          fieldId: variant.field.id,
-                          options: options.filter(
-                            (item) => item.id !== option.id
-                          ),
-                        },
-                      })
-                    }
-                  >
-                    Delete {option.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </Flex>
-        )}
-      </Flex>
-      {mode === "idle" ? (
-        <Select
-          options={[baseVariantId, ...options.map((option) => option.id)]}
-          getLabel={(id: string) =>
-            id === baseVariantId
-              ? baseLabel
-              : (options.find((option) => option.id === id)?.name ?? id)
-          }
-          value={selected?.id ?? baseVariantId}
-          onChange={(id) =>
-            selectVariant(id === baseVariantId ? undefined : id)
-          }
-        />
-      ) : (
-        <Flex gap="1" align="center">
-          <InputField
-            autoFocus
-            css={{ flexGrow: 1 }}
-            placeholder="Variant name, e.g. Small"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submit();
-              }
-              if (event.key === "Escape") {
-                setMode("idle");
-              }
-            }}
-          />
-          <Button
-            type="button"
-            disabled={name.trim().length === 0}
-            onClick={submit}
-          >
-            {mode === "create" ? "Create" : "Rename"}
-          </Button>
-          <SmallIconButton
-            aria-label="Cancel"
-            icon={<XIcon />}
-            onClick={() => {
-              setMode("idle");
-              setName("");
-            }}
-          />
-        </Flex>
-      )}
-      {canEditVariants && (
-        <Text color="subtle">
-          {selected === undefined
-            ? `Styling inside this copy edits ${baseLabel}, the design every variant starts from.`
-            : `Styling inside this copy edits ${selected.name}. Other copies keep their own variant.`}
-        </Text>
-      )}
-    </Flex>
-  );
-};
-
 const deleteProperty = ({
   fragmentId,
   field,
 }: {
   fragmentId: string;
-  field: CustomSlotField;
+  field: BuilderComponentField;
 }) =>
   executeRuntimeMutation({
-    id: "customSlots.deleteField",
+    id: "builderComponents.deleteField",
     input: { fragmentId, fieldId: field.id },
   });
 
 const setValue = (
   slotId: string,
   fieldId: string,
-  value: null | CustomSlotFieldValue
+  value: null | BuilderComponentFieldValue
 ) =>
   executeRuntimeMutation({
-    id: "customSlots.setFieldValue",
+    id: "builderComponents.setFieldValue",
     input: {
       slotId,
       fieldId,
       value,
-      override: $customSlotOverrideTarget.get(),
+      override: $builderComponentOverrideTarget.get(),
     },
   });
 
@@ -620,7 +382,7 @@ const getBindingHandlers = (slotId: string, fieldId: string) => ({
 });
 
 /** The binding dot for a text-like property and the value it is bound to. */
-const useTextBinding = (localValue: undefined | CustomSlotFieldValue) => {
+const useTextBinding = (localValue: undefined | BuilderComponentFieldValue) => {
   const binding = useBindableControl({
     boundExpression: localValue?.type === "expression" ? localValue : undefined,
     fallbackExpression: JSON.stringify(
@@ -644,7 +406,7 @@ const TextValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   const { binding, boundValue } = useTextBinding(localValue);
@@ -677,15 +439,17 @@ const TextValueControl = ({
 };
 
 /**
- * HTML Embed property: the same code editor as an HTML Embed's Code setting,
- * with the expand button for a bigger window.
+ * HTML Embed and Rich text properties: the same code editor as an HTML or
+ * Markdown Embed's Code setting, with the expand button for a bigger window.
  */
-const HtmlValueControl = ({
+const CodeValueControl = ({
   slotId,
   property,
+  lang,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
+  lang: "html" | "markdown";
 }) => {
   const { field, localValue } = property;
   const [error, setError] = useState<string>();
@@ -693,7 +457,7 @@ const HtmlValueControl = ({
   const draft = useDraftValue(
     localValue?.type === "literal" ? formatValue(localValue.value) : "",
     (value) => {
-      const issue = validateHtmlEmbedCode(value);
+      const issue = lang === "html" ? validateHtmlEmbedCode(value) : undefined;
       setError(issue?.message);
       if (issue === undefined) {
         setValue(slotId, field.id, { type: "literal", value });
@@ -708,7 +472,7 @@ const HtmlValueControl = ({
         {...getBindingHandlers(slotId, field.id)}
         renderControl={({ readOnly }) => (
           <CodeEditor
-            lang="html"
+            lang={lang}
             title={
               <DialogTitle
                 maximizable
@@ -744,7 +508,7 @@ const BooleanValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   const shownValue = localValue ?? field.defaultValue;
@@ -784,7 +548,7 @@ const ImageValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   const shownValue = localValue ?? field.defaultValue;
@@ -816,7 +580,7 @@ const ImageValueControl = ({
   );
 };
 
-const toUrlInputProp = (value: undefined | CustomSlotFieldValue) => {
+const toUrlInputProp = (value: undefined | BuilderComponentFieldValue) => {
   if (value?.type === "page") {
     return { type: "page" as const, value: value.value };
   }
@@ -834,7 +598,7 @@ const LinkValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   // show the default until this copy has its own link
@@ -895,7 +659,7 @@ const NumberValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   const { binding, boundValue } = useTextBinding(localValue);
@@ -945,7 +709,7 @@ const JsonValueControl = ({
   property,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
 }) => {
   const { field, localValue } = property;
   const [error, setError] = useState<string>();
@@ -1026,15 +790,25 @@ const JsonValueControl = ({
   );
 };
 
-/** Choice property: one click picks one of the fixed values. */
+/**
+ * Choice property: one click picks a value. Designers add a value with "+",
+ * which also switches this copy to it, like a new Webflow variant; styling
+ * inside the copy then edits that value.
+ */
 const ChoiceValueControl = ({
   slotId,
+  fragmentId,
   property,
+  canAddChoices,
 }: {
   slotId: string;
-  property: CustomSlotProperty;
+  fragmentId: string;
+  property: BuilderComponentProperty;
+  canAddChoices: boolean;
 }) => {
   const { field, localValue } = property;
+  const [isAdding, setIsAdding] = useState(false);
+  const [newChoice, setNewChoice] = useState("");
   const shownValue = localValue ?? field.defaultValue;
   const current =
     shownValue?.type === "literal" && typeof shownValue.value === "string"
@@ -1046,18 +820,96 @@ const ChoiceValueControl = ({
     current === undefined || choices.includes(current)
       ? choices
       : [current, ...choices];
-  if (options.length === 0) {
-    return <Text color="subtle">Add choices from the property menu.</Text>;
+  const addChoice = () => {
+    const value = newChoice.trim();
+    if (value === "") {
+      return;
+    }
+    // add the value and switch this copy to it in one undo step
+    executeRuntimeMutationSequence([
+      ...(choices.includes(value)
+        ? []
+        : [
+            {
+              id: "builderComponents.updateField" as const,
+              input: {
+                fragmentId,
+                fieldId: field.id,
+                choices: [...choices, value],
+              },
+            },
+          ]),
+      {
+        id: "builderComponents.setFieldValue" as const,
+        input: {
+          slotId,
+          fieldId: field.id,
+          value: { type: "literal" as const, value },
+          override: $builderComponentOverrideTarget.get(),
+        },
+      },
+    ]);
+    setNewChoice("");
+    setIsAdding(false);
+  };
+  if (isAdding) {
+    return (
+      <Flex gap="1" align="center">
+        <InputField
+          autoFocus
+          css={{ flexGrow: 1 }}
+          placeholder="New choice, e.g. large"
+          value={newChoice}
+          onChange={(event) => setNewChoice(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              addChoice();
+            }
+            if (event.key === "Escape") {
+              setIsAdding(false);
+            }
+          }}
+        />
+        <Button
+          type="button"
+          disabled={newChoice.trim() === ""}
+          onClick={addChoice}
+        >
+          Add
+        </Button>
+        <SmallIconButton
+          aria-label="Cancel"
+          icon={<XIcon />}
+          onClick={() => setIsAdding(false)}
+        />
+      </Flex>
+    );
   }
   return (
-    <Select
-      options={options}
-      placeholder="Pick a choice"
-      value={current}
-      onChange={(value) =>
-        setValue(slotId, field.id, { type: "literal", value })
-      }
-    />
+    <Flex gap="1" align="center">
+      {options.length === 0 ? (
+        <Text color="subtle" css={{ flexGrow: 1 }}>
+          No choices yet.
+        </Text>
+      ) : (
+        <Select
+          css={{ flexGrow: 1 }}
+          options={options}
+          placeholder="Pick a choice"
+          value={current}
+          onChange={(value) =>
+            setValue(slotId, field.id, { type: "literal", value })
+          }
+        />
+      )}
+      {canAddChoices && (
+        <SmallIconButton
+          aria-label={`New ${humanizeAttribute(field.name)} choice`}
+          icon={<PlusIcon />}
+          onClick={() => setIsAdding(true)}
+        />
+      )}
+    </Flex>
   );
 };
 
@@ -1066,14 +918,14 @@ const EditChoicesForm = ({
   fragmentId,
   onClose,
 }: {
-  field: CustomSlotField;
+  field: BuilderComponentField;
   fragmentId: string;
   onClose: () => void;
 }) => {
   const [value, setValue] = useState((field.choices ?? []).join(", "));
   const submit = () => {
     executeRuntimeMutation({
-      id: "customSlots.updateField",
+      id: "builderComponents.updateField",
       input: {
         fragmentId,
         fieldId: field.id,
@@ -1116,7 +968,7 @@ const PropertyRow = ({
 }: {
   slotId: string;
   fragmentId: string;
-  property: CustomSlotProperty;
+  property: BuilderComponentProperty;
   /** names of the component's other properties */
   takenNames: readonly string[];
   /** content editors fill in the value but cannot change the property */
@@ -1126,7 +978,7 @@ const PropertyRow = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [isEditingChoices, setIsEditingChoices] = useState(false);
   const isLink = field.type === "link";
-  const issue = getCustomSlotFieldIssue(field, localValue);
+  const issue = getBuilderComponentFieldIssue(field, localValue);
 
   if (isRenaming) {
     return (
@@ -1139,7 +991,7 @@ const PropertyRow = ({
         onCancel={() => setIsRenaming(false)}
         onSubmit={(name) => {
           executeRuntimeMutation({
-            id: "customSlots.updateField",
+            id: "builderComponents.updateField",
             input: { fragmentId, fieldId: field.id, name },
           });
           setIsRenaming(false);
@@ -1197,7 +1049,7 @@ const PropertyRow = ({
                     key={type}
                     onSelect={() =>
                       executeRuntimeMutation({
-                        id: "customSlots.updateField",
+                        id: "builderComponents.updateField",
                         input: { fragmentId, fieldId: field.id, type },
                       })
                     }
@@ -1209,7 +1061,7 @@ const PropertyRow = ({
                 <DropdownMenuItem
                   onSelect={() =>
                     executeRuntimeMutation({
-                      id: "customSlots.updateField",
+                      id: "builderComponents.updateField",
                       input: {
                         fragmentId,
                         fieldId: field.id,
@@ -1225,7 +1077,7 @@ const PropertyRow = ({
                 <DropdownMenuItem
                   onSelect={() =>
                     executeRuntimeMutation({
-                      id: "customSlots.updateField",
+                      id: "builderComponents.updateField",
                       input: {
                         fragmentId,
                         fieldId: field.id,
@@ -1261,13 +1113,20 @@ const PropertyRow = ({
       ) : field.type === "boolean" ? (
         <BooleanValueControl slotId={slotId} property={property} />
       ) : field.type === "html" ? (
-        <HtmlValueControl slotId={slotId} property={property} />
+        <CodeValueControl slotId={slotId} property={property} lang="html" />
+      ) : field.type === "richText" ? (
+        <CodeValueControl slotId={slotId} property={property} lang="markdown" />
       ) : field.type === "number" ? (
         <NumberValueControl slotId={slotId} property={property} />
       ) : field.type === "json" ? (
         <JsonValueControl slotId={slotId} property={property} />
       ) : field.type === "choice" ? (
-        <ChoiceValueControl slotId={slotId} property={property} />
+        <ChoiceValueControl
+          slotId={slotId}
+          fragmentId={fragmentId}
+          property={property}
+          canAddChoices={canEditProperties}
+        />
       ) : (
         <TextValueControl slotId={slotId} property={property} />
       )}
@@ -1291,9 +1150,9 @@ const CopyTagSelect = ({ slotId }: { slotId: string }) => {
       <Text variant="titles">Tag</Text>
       <Select
         css={{ width: theme.spacing[22] }}
-        options={[noTag, ...customSlotTags]}
+        options={[noTag, ...builderComponentTags]}
         getLabel={(tag: string) => (tag === noTag ? "None" : tag)}
-        value={getCustomSlotTag(instance?.tag) ?? noTag}
+        value={getBuilderComponentTag(instance?.tag) ?? noTag}
         onChange={(tag) =>
           executeRuntimeMutation({
             id: "instances.setTag",
@@ -1307,11 +1166,11 @@ const CopyTagSelect = ({ slotId }: { slotId: string }) => {
 
 /** Settings inside the component still connected to deleted properties. */
 const $brokenConnections = computed(
-  [$selectedCustomSlot, $instances, $props, $dataSources],
+  [$selectedBuilderComponent, $instances, $props, $dataSources],
   (selected, instances, props, dataSources) =>
     selected === undefined
       ? []
-      : findBrokenCustomSlotReferences({
+      : findBrokenBuilderComponentReferences({
           instances,
           props,
           dataSources,
@@ -1340,11 +1199,11 @@ const BrokenConnections = () => {
 };
 
 /**
- * Properties of the selected Custom Slot copy, like Figma or Webflow component
+ * Properties of the selected Builder component copy, like Figma or Webflow component
  * properties: the list is shared, each copy fills in its own values.
  */
-export const CustomSlotPropertiesSection = () => {
-  const selected = useStore($selectedCustomSlot);
+export const BuilderComponentPropertiesSection = () => {
+  const selected = useStore($selectedBuilderComponent);
   const isContentMode = useStore($isContentMode);
   const isContentEditable = useStore($isSelectedCopyContentEditable);
   const instances = useStore($instances);
@@ -1362,9 +1221,8 @@ export const CustomSlotPropertiesSection = () => {
   const properties = isDesigner
     ? selected.properties
     : selected.properties.filter(({ field, localValue }) =>
-        isCustomSlotFieldContentEditable(field, localValue)
+        isBuilderComponentFieldContentEditable(field, localValue)
       );
-  const variant = properties.find(({ field }) => field.type === "variant");
   const takenNames = selected.properties.map(({ field }) => field.name);
   return (
     <CollapsibleSectionRoot
@@ -1405,26 +1263,16 @@ export const CustomSlotPropertiesSection = () => {
         )}
         {isDesigner && <BrokenConnections />}
         {isDesigner && <CopyTagSelect slotId={slotId} />}
-        {(isDesigner || (variant?.field.options?.length ?? 0) > 0) && (
-          <VariantSwitcher
+        {properties.map((property) => (
+          <PropertyRow
+            key={property.field.id}
             slotId={slotId}
             fragmentId={fragmentId}
-            variant={variant}
-            canEditVariants={isDesigner}
+            property={property}
+            takenNames={takenNames}
+            canEditProperties={isDesigner}
           />
-        )}
-        {properties
-          .filter(({ field }) => field.type !== "variant")
-          .map((property) => (
-            <PropertyRow
-              key={property.field.id}
-              slotId={slotId}
-              fragmentId={fragmentId}
-              property={property}
-              takenNames={takenNames}
-              canEditProperties={isDesigner}
-            />
-          ))}
+        ))}
         {isDesigner && isAdding && (
           <AddPropertyForm
             takenNames={takenNames}
@@ -1460,9 +1308,9 @@ const $selectedElementBrokenConnections = computed(
       if (
         instances.get(fragmentId)?.component === "Fragment" &&
         instances.get(instanceSelector[index + 1])?.component ===
-          customSlotComponent
+          builderComponent
       ) {
-        return findBrokenCustomSlotReferences({
+        return findBrokenBuilderComponentReferences({
           instances,
           props,
           dataSources,

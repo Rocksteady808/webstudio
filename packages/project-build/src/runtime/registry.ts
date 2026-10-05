@@ -39,9 +39,9 @@ import * as props from "./props";
 import * as runtimeUi from "./runtime-ui";
 import * as projectSearch from "./project-search";
 import * as slot from "./slot";
-import * as customSlotFields from "./custom-slot-fields";
-import * as customSlotCreate from "./custom-slot-create";
-import * as customSlotExpose from "./custom-slot-expose";
+import * as builderComponentFields from "./builder-component-fields";
+import * as builderComponentCreate from "./builder-component-create";
+import * as builderComponentExpose from "./builder-component-expose";
 import * as designTokenImport from "./design-token-import";
 import * as audit from "./audit";
 import * as styles from "./styles";
@@ -1354,68 +1354,98 @@ export const builderRuntimeOperations = [
     ({ state, input, context }) => slot.extractSharedSlot(state, input, context)
   ),
   runtimeOperation(
-    "customSlots.createComponent",
+    "builderComponents.createComponent",
     api("create-component", "createComponentFromInstance"),
     mutationContract({
-      readNamespaces: [...customSlotCreate.createComponentNamespaces],
-      writeNamespaces: [...customSlotCreate.createComponentNamespaces],
+      readNamespaces: [...builderComponentCreate.createComponentNamespaces],
+      writeNamespaces: [...builderComponentCreate.createComponentNamespaces],
     }),
-    customSlotCreate.createComponentFromInstanceInput,
+    builderComponentCreate.createComponentFromInstanceInput,
     ({ state, input, context }) =>
-      customSlotCreate.createComponentFromInstance(state, input, context)
+      builderComponentCreate.createComponentFromInstance(state, input, context)
   ),
   runtimeOperation(
-    "customSlots.exposeProperties",
+    "builderComponents.exposeProperties",
     api("expose-component-properties", "exposeComponentProperties"),
     mutationContract({
-      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
-      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      readNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
+      writeNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
     }),
-    customSlotExpose.exposeCustomSlotPropertiesInput,
+    builderComponentExpose.exposeBuilderComponentPropertiesInput,
     ({ state, input, context }) =>
-      customSlotExpose.exposeCustomSlotProperties(state, input, context)
+      builderComponentExpose.exposeBuilderComponentProperties(
+        state,
+        input,
+        context
+      )
   ),
   runtimeOperation(
-    "customSlots.createField",
-    api("create-custom-slot-field", "createCustomSlotField"),
+    "builderComponents.createField",
+    api("create-builder-component-field", "createBuilderComponentField"),
     mutationContract({
-      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
-      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      readNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
+      writeNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
     }),
-    customSlotFields.createCustomSlotFieldInput,
+    builderComponentFields.createBuilderComponentFieldInput,
     ({ state, input, context }) =>
-      customSlotFields.createCustomSlotField(state, input, context)
+      builderComponentFields.createBuilderComponentField(state, input, context)
   ),
   runtimeOperation(
-    "customSlots.updateField",
-    api("update-custom-slot-field", "updateCustomSlotField"),
+    "builderComponents.updateField",
+    api("update-builder-component-field", "updateBuilderComponentField"),
     mutationContract({
-      readNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
-      writeNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+      readNamespaces: [
+        ...builderComponentFields.builderComponentSchemaNamespaces,
+      ],
+      writeNamespaces: [
+        ...builderComponentFields.builderComponentSchemaNamespaces,
+      ],
     }),
-    customSlotFields.updateCustomSlotFieldInput,
-    ({ state, input }) => customSlotFields.updateCustomSlotField(state, input)
+    builderComponentFields.updateBuilderComponentFieldInput,
+    ({ state, input }) =>
+      builderComponentFields.updateBuilderComponentField(state, input)
   ),
   runtimeOperation(
-    "customSlots.deleteField",
-    api("delete-custom-slot-field", "deleteCustomSlotField"),
+    "builderComponents.deleteField",
+    api("delete-builder-component-field", "deleteBuilderComponentField"),
     mutationContract({
-      readNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
-      writeNamespaces: [...customSlotFields.customSlotSchemaNamespaces],
+      readNamespaces: [
+        ...builderComponentFields.builderComponentSchemaNamespaces,
+      ],
+      writeNamespaces: [
+        ...builderComponentFields.builderComponentSchemaNamespaces,
+      ],
     }),
-    customSlotFields.deleteCustomSlotFieldInput,
-    ({ state, input }) => customSlotFields.deleteCustomSlotField(state, input)
+    builderComponentFields.deleteBuilderComponentFieldInput,
+    ({ state, input }) =>
+      builderComponentFields.deleteBuilderComponentField(state, input)
   ),
   runtimeOperation(
-    "customSlots.setFieldValue",
-    api("set-custom-slot-field-value", "setCustomSlotFieldValue"),
+    "builderComponents.setFieldValue",
+    api("set-builder-component-field-value", "setBuilderComponentFieldValue"),
     mutationContract({
-      readNamespaces: [...customSlotFields.customSlotFieldNamespaces],
-      writeNamespaces: [...customSlotFields.customSlotFieldNamespaces],
+      readNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
+      writeNamespaces: [
+        ...builderComponentFields.builderComponentFieldNamespaces,
+      ],
     }),
-    customSlotFields.setCustomSlotFieldValueInput,
+    builderComponentFields.setBuilderComponentFieldValueInput,
     ({ state, input, context }) =>
-      customSlotFields.setCustomSlotFieldValue(state, input, context)
+      builderComponentFields.setBuilderComponentFieldValue(
+        state,
+        input,
+        context
+      )
   ),
   runtimeOperation(
     "instances.move",

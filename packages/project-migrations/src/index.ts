@@ -8,6 +8,10 @@ import {
   type StyleDecl,
   type WebstudioData,
 } from "@webstudio-is/sdk";
+import {
+  migrateBuilderComponentsMutable,
+  migrateBuilderComponentVariantsMutable,
+} from "./builder-components";
 import { migratePages } from "./pages";
 import { migrateResourcesMutable } from "./resources";
 import { migrateStylesMutable } from "./styles";
@@ -183,4 +187,6 @@ export const migrateWebstudioDataMutable = (data: WebstudioData) => {
   migrateCodeTextContentMutable(data);
   migrateContentBlockImageStylesMutable(data);
   migrateContentBlockDocumentBindingsMutable(data);
+  migrateBuilderComponentsMutable(data);
+  migrateBuilderComponentVariantsMutable(data);
 };

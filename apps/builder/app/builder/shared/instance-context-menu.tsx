@@ -349,7 +349,7 @@ export const MenuItems = () => {
       >
         Convert
       </ContextMenuItem>
-      {isFeatureEnabled("customSlot") && (
+      {isFeatureEnabled("builderComponent") && (
         <ContextMenuItem
           disabled={!permissions.canCreateComponent}
           onSelect={() => {

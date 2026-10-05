@@ -1,10 +1,10 @@
 import { expect, test } from "vitest";
 import {
   createScope,
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
   encodeDataSourceVariable,
   type DataSources,
   type Instances,
@@ -48,7 +48,7 @@ test("published JSX keeps local values across shared Card structure edits", () =
     instances.set(id, {
       type: "instance",
       id,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "card-source" }],
     });
   }
@@ -57,13 +57,13 @@ test("published JSX keeps local values across shared Card structure edits", () =
     type: "parameter",
     id: "component-parameter",
     scopeInstanceId: "card-source",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   dataSources.set("schema", {
     type: "variable",
     id: "schema",
     scopeInstanceId: "card-source",
-    name: customSlotSchemaVariable,
+    name: builderComponentSchemaVariable,
     value: {
       type: "json",
       value: ["image", "heading", "description", "button"].map((name) => ({
@@ -82,7 +82,7 @@ test("published JSX keeps local values across shared Card structure edits", () =
       type: "variable",
       id: `values-${id}`,
       scopeInstanceId: id,
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: {
         type: "json",
         value: Object.fromEntries(
@@ -147,7 +147,7 @@ test("published JSX keeps local values across shared Card structure edits", () =
   }
 });
 
-test("published copies carry the variant they use", () => {
+test("published copies carry the choice values they use", () => {
   const instances: Instances = new Map([
     [
       "body",
@@ -184,7 +184,7 @@ test("published copies carry the variant they use", () => {
     instances.set(id, {
       type: "instance",
       id,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "source" }],
     });
   }
@@ -195,7 +195,7 @@ test("published copies carry the variant they use", () => {
         type: "parameter",
         id: "component-parameter",
         scopeInstanceId: "source",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
       },
     ],
     [
@@ -204,18 +204,15 @@ test("published copies carry the variant they use", () => {
         type: "variable",
         id: "schema",
         scopeInstanceId: "source",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         value: {
           type: "json",
           value: [
             {
               id: "size",
               name: "size",
-              type: "variant",
-              options: [
-                { id: "small", name: "Small" },
-                { id: "large", name: "Large" },
-              ],
+              type: "choice",
+              choices: ["small", "large"],
               defaultValue: { type: "literal", value: "large" },
             },
           ],
@@ -228,7 +225,7 @@ test("published copies carry the variant they use", () => {
         type: "variable",
         id: "values-small",
         scopeInstanceId: "small-button",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         value: {
           type: "json",
           value: { size: { type: "literal", value: "small" } },
@@ -248,9 +245,9 @@ test("published copies carry the variant they use", () => {
     metas: new Map(),
     classesMap: new Map(),
   });
-  expect(generated).toContain(`data-ws-variant={"small"}`);
-  // the other copy falls back to the default option
-  expect(generated).toContain(`data-ws-variant={"large"}`);
+  expect(generated).toContain(`data-ws-props={"size=small"}`);
+  // the other copy falls back to the default value
+  expect(generated).toContain(`data-ws-props={"size=large"}`);
 });
 
 test("published nested copies read values from their parent copy", () => {
@@ -270,7 +267,7 @@ test("published nested copies read values from their parent copy", () => {
     instances.set(id, {
       type: "instance",
       id,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "card-fragment" }],
     });
   }
@@ -283,7 +280,7 @@ test("published nested copies read values from their parent copy", () => {
   instances.set("nested-button", {
     type: "instance",
     id: "nested-button",
-    component: customSlotComponent,
+    component: builderComponent,
     children: [{ type: "id", value: "button-fragment" }],
   });
   instances.set("button-fragment", {
@@ -303,13 +300,13 @@ test("published nested copies read values from their parent copy", () => {
     type: "parameter",
     id: "card-component",
     scopeInstanceId: "card-fragment",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   dataSources.set("card-schema", {
     type: "variable",
     id: "card-schema",
     scopeInstanceId: "card-fragment",
-    name: customSlotSchemaVariable,
+    name: builderComponentSchemaVariable,
     value: {
       type: "json",
       value: [{ id: "button-label", name: "buttonLabel" }],
@@ -323,7 +320,7 @@ test("published nested copies read values from their parent copy", () => {
       type: "variable",
       id: `values-${id}`,
       scopeInstanceId: id,
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: {
         type: "json",
         value: { "button-label": { type: "literal", value: label } },
@@ -334,20 +331,20 @@ test("published nested copies read values from their parent copy", () => {
     type: "parameter",
     id: "button-component",
     scopeInstanceId: "button-fragment",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   dataSources.set("button-schema", {
     type: "variable",
     id: "button-schema",
     scopeInstanceId: "button-fragment",
-    name: customSlotSchemaVariable,
+    name: builderComponentSchemaVariable,
     value: { type: "json", value: [{ id: "label", name: "label" }] },
   });
   dataSources.set("button-values", {
     type: "variable",
     id: "button-values",
     scopeInstanceId: "nested-button",
-    name: customSlotValuesVariable,
+    name: builderComponentValuesVariable,
     value: {
       type: "json",
       value: {
@@ -391,7 +388,7 @@ test("published overrides change only the parent copy that set them", () => {
     instances.set(id, {
       type: "instance",
       id,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "card-fragment" }],
     });
   }
@@ -404,7 +401,7 @@ test("published overrides change only the parent copy that set them", () => {
   instances.set("nested-button", {
     type: "instance",
     id: "nested-button",
-    component: customSlotComponent,
+    component: builderComponent,
     children: [{ type: "id", value: "button-fragment" }],
   });
   instances.set("button-fragment", {
@@ -424,26 +421,26 @@ test("published overrides change only the parent copy that set them", () => {
     type: "parameter",
     id: "card-component",
     scopeInstanceId: "card-fragment",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   dataSources.set("button-component", {
     type: "parameter",
     id: "button-component",
     scopeInstanceId: "button-fragment",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   dataSources.set("button-schema", {
     type: "variable",
     id: "button-schema",
     scopeInstanceId: "button-fragment",
-    name: customSlotSchemaVariable,
+    name: builderComponentSchemaVariable,
     value: { type: "json", value: [{ id: "label", name: "label" }] },
   });
   dataSources.set("button-values", {
     type: "variable",
     id: "button-values",
     scopeInstanceId: "nested-button",
-    name: customSlotValuesVariable,
+    name: builderComponentValuesVariable,
     value: {
       type: "json",
       value: { label: { type: "literal", value: "Shared" } },
@@ -453,7 +450,7 @@ test("published overrides change only the parent copy that set them", () => {
     type: "variable",
     id: "card-a-overrides",
     scopeInstanceId: "card-a",
-    name: "__customSlotOverrides",
+    name: "__builderComponentOverrides",
     value: {
       type: "json",
       value: {
@@ -492,7 +489,7 @@ test("published copies render as their chosen tag", () => {
   instances.set("item", {
     type: "instance",
     id: "item",
-    component: customSlotComponent,
+    component: builderComponent,
     tag: "li",
     children: [{ type: "id", value: "source" }],
   });
@@ -507,7 +504,7 @@ test("published copies render as their chosen tag", () => {
     type: "parameter",
     id: "component-parameter",
     scopeInstanceId: "source",
-    name: customSlotComponentVariable,
+    name: builderComponentParameterVariable,
   });
   const generated = generateWebstudioComponent({
     scope: createScope(),

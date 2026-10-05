@@ -1,16 +1,16 @@
 import { expect, test } from "vitest";
 import {
-  createCustomSlotFragment,
-  customSlotComponentVariable,
-  customSlotOverridesVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
+  createBuilderComponentFragment,
+  builderComponentParameterVariable,
+  builderComponentOverridesVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
   encodeDataVariableId,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
-  getCustomSlotVariantState,
+  findBuilderComponentDataSource,
+  getBuilderComponentContentRootId,
+  getBuilderComponentChoiceState,
   getStyleDeclKey,
-  parseCustomSlotFields,
+  parseBuilderComponentFields,
   type Instance,
   type WebstudioData,
 } from "@webstudio-is/sdk";
@@ -21,24 +21,24 @@ import { insertWebstudioFragmentCopy } from "./fragment";
 import { duplicateInstanceAfterItselfMutable } from "./instance-duplicate";
 import { styleUpdateInput } from "./styles";
 import {
-  createCustomSlotField,
-  deleteCustomSlotField,
-  findBrokenCustomSlotReferences,
-  findCustomSlotConnection,
-  getCustomSlotProperties,
-  getCustomSlotVariantStates,
-  getCustomSlotActiveVariantState,
-  setCustomSlotFieldValue,
-  toCustomSlotFieldName,
-  updateCustomSlotField,
-} from "./custom-slot-fields";
+  createBuilderComponentField,
+  deleteBuilderComponentField,
+  findBrokenBuilderComponentReferences,
+  findBuilderComponentConnection,
+  getBuilderComponentProperties,
+  getBuilderComponentChoiceStates,
+  getBuilderComponentActiveChoiceState,
+  setBuilderComponentFieldValue,
+  toBuilderComponentFieldName,
+  updateBuilderComponentField,
+} from "./builder-component-fields";
 
 const createIdFactory = () => {
   let index = 0;
   return () => `id-${index++}`;
 };
 
-/** Two copies of one Custom Slot whose Fragment holds a link button. */
+/** Two copies of one Builder component whose Fragment holds a link button. */
 const createCards = () => {
   const createId = createIdFactory();
   const data: Omit<WebstudioData, "pages"> = {
@@ -57,7 +57,7 @@ const createCards = () => {
     breakpoints: new Map(),
     assets: new Map(),
   };
-  const fragment = createCustomSlotFragment({ createId });
+  const fragment = createBuilderComponentFragment({ createId });
   const { newInstanceIds } = insertWebstudioFragmentCopy({
     data,
     fragment,
@@ -75,7 +75,8 @@ const createCards = () => {
       projectId: "project",
       createId,
     }) ?? "";
-  const fragmentId = getCustomSlotContentRootId(data.instances, first) ?? "";
+  const fragmentId =
+    getBuilderComponentContentRootId(data.instances, first) ?? "";
   // replace the default heading with a link button
   data.instances.set(fragmentId, {
     type: "instance",
@@ -97,10 +98,10 @@ const createCards = () => {
     type: "string",
     value: "https://flexflow.com/",
   });
-  const component = findCustomSlotDataSource(
+  const component = findBuilderComponentDataSource(
     data.dataSources,
     fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   );
   return {
     state: data as BuilderState,
@@ -118,36 +119,36 @@ const apply = (state: BuilderState, mutation: BuilderRuntimeMutation) =>
   ]).state;
 
 const getFields = (state: BuilderState, fragmentId: string) => {
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     state.dataSources ?? new Map(),
     fragmentId,
-    customSlotSchemaVariable
+    builderComponentSchemaVariable
   );
-  return parseCustomSlotFields(
+  return parseBuilderComponentFields(
     schema?.type === "variable" ? schema.value.value : undefined
   );
 };
 
 const getValues = (state: BuilderState, slotId: string) => {
-  const values = findCustomSlotDataSource(
+  const values = findBuilderComponentDataSource(
     state.dataSources ?? new Map(),
     slotId,
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
   return values?.type === "variable" ? values.value.value : undefined;
 };
 
 test("turns property labels into bindable names", () => {
-  expect(toCustomSlotFieldName("Button Link")).toEqual("buttonLink");
-  expect(toCustomSlotFieldName("  url ")).toEqual("url");
-  expect(toCustomSlotFieldName("2nd label")).toEqual("_2ndLabel");
+  expect(toBuilderComponentFieldName("Button Link")).toEqual("buttonLink");
+  expect(toBuilderComponentFieldName("  url ")).toEqual("url");
+  expect(toBuilderComponentFieldName("2nd label")).toEqual("_2ndLabel");
 });
 
 test("gives two copies of a link button their own link and label", () => {
   const cards = createCards();
   let state = cards.state;
 
-  const link = createCustomSlotField(
+  const link = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -159,7 +160,7 @@ test("gives two copies of a link button their own link and label", () => {
   expect(link.result.expression).toEqual(`${cards.componentRef}.link`);
   state = apply(state, link);
 
-  const label = createCustomSlotField(
+  const label = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -175,7 +176,7 @@ test("gives two copies of a link button their own link and label", () => {
 
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -187,7 +188,7 @@ test("gives two copies of a link button their own link and label", () => {
   );
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.second,
@@ -207,7 +208,7 @@ test("gives two copies of a link button their own link and label", () => {
   // reset the second copy to the default
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       { slotId: cards.second, fieldId: link.result.fieldId, value: null },
       cards.context
@@ -223,14 +224,14 @@ test("rejects duplicate and invalid property names", () => {
   const cards = createCards();
   const state = apply(
     cards.state,
-    createCustomSlotField(
+    createBuilderComponentField(
       cards.state,
       { fragmentId: cards.fragmentId, name: "link" },
       cards.context
     )
   );
   expect(() =>
-    createCustomSlotField(
+    createBuilderComponentField(
       state,
       { fragmentId: cards.fragmentId, name: "link" },
       cards.context
@@ -241,7 +242,7 @@ test("rejects duplicate and invalid property names", () => {
 test("renaming a property keeps connected settings working", () => {
   const cards = createCards();
   let state = cards.state;
-  const link = createCustomSlotField(
+  const link = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "link" },
     cards.context
@@ -273,7 +274,7 @@ test("renaming a property keeps connected settings working", () => {
 
   state = apply(
     state,
-    updateCustomSlotField(state, {
+    updateBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
       fieldId: link.result.fieldId,
       name: "url",
@@ -291,7 +292,7 @@ test("renaming a property keeps connected settings working", () => {
 test("deleting a property keeps copy values and reports connected settings", () => {
   const cards = createCards();
   let state = cards.state;
-  const link = createCustomSlotField(
+  const link = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -313,7 +314,7 @@ test("deleting a property keeps copy values and reports connected settings", () 
   };
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -326,7 +327,7 @@ test("deleting a property keeps copy values and reports connected settings", () 
 
   state = apply(
     state,
-    deleteCustomSlotField(state, {
+    deleteBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
       fieldId: link.result.fieldId,
     })
@@ -340,7 +341,7 @@ test("deleting a property keeps copy values and reports connected settings", () 
     value: `${cards.componentRef}.link`,
   });
   expect(
-    findBrokenCustomSlotReferences({
+    findBrokenBuilderComponentReferences({
       instances: state.instances ?? new Map(),
       props: state.props ?? new Map(),
       dataSources: state.dataSources ?? new Map(),
@@ -356,7 +357,7 @@ test("deleting a property keeps copy values and reports connected settings", () 
 test("reads properties for a selected copy and connections for elements", () => {
   const cards = createCards();
   let state = cards.state;
-  const link = createCustomSlotField(
+  const link = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "link" },
     cards.context
@@ -364,7 +365,7 @@ test("reads properties for a selected copy and connections for elements", () => 
   state = apply(state, link);
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -376,22 +377,22 @@ test("reads properties for a selected copy and connections for elements", () => 
   );
   const data = state as Pick<WebstudioData, "instances" | "dataSources">;
 
-  const first = getCustomSlotProperties({ ...data, slotId: cards.first });
+  const first = getBuilderComponentProperties({ ...data, slotId: cards.first });
   expect(first?.fragmentId).toEqual(cards.fragmentId);
   expect(
     first?.properties.map(({ field, localValue }) => [field.name, localValue])
   ).toEqual([["link", { type: "literal", value: "https://one.com" }]]);
   expect(
-    getCustomSlotProperties({ ...data, slotId: cards.second })?.properties[0]
-      .localValue
+    getBuilderComponentProperties({ ...data, slotId: cards.second })
+      ?.properties[0].localValue
   ).toBeUndefined();
 
-  const componentId = findCustomSlotDataSource(
+  const componentId = findBuilderComponentDataSource(
     data.dataSources,
     cards.fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   )?.id;
-  const connection = findCustomSlotConnection({
+  const connection = findBuilderComponentConnection({
     dataSources: data.dataSources,
     availableDataSourceIds: ["unrelated", componentId ?? ""],
   });
@@ -401,7 +402,7 @@ test("reads properties for a selected copy and connections for elements", () => 
     `${cards.componentRef}.link`
   );
   expect(
-    findCustomSlotConnection({
+    findBuilderComponentConnection({
       dataSources: data.dataSources,
       availableDataSourceIds: ["unrelated"],
     })
@@ -411,7 +412,7 @@ test("reads properties for a selected copy and connections for elements", () => 
 test("stores link properties with page values", () => {
   const cards = createCards();
   let state = cards.state;
-  const link = createCustomSlotField(
+  const link = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -430,7 +431,7 @@ test("stores link properties with page values", () => {
   });
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -448,76 +449,15 @@ test("stores link properties with page values", () => {
   });
 });
 
-test("variant properties keep their options and each copy picks one", () => {
+test("elements inside a component offer its choice values as conditions", () => {
   const cards = createCards();
-  let state = cards.state;
-  const size = createCustomSlotField(
-    state,
-    {
-      fragmentId: cards.fragmentId,
-      name: "size",
-      type: "variant",
-      options: [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
-      ],
-      defaultValue: { type: "literal", value: "large" },
-    },
-    cards.context
-  );
-  state = apply(state, size);
-  state = apply(
-    state,
-    updateCustomSlotField(state, {
-      fragmentId: cards.fragmentId,
-      fieldId: size.result.fieldId,
-      options: [
-        { id: "small", name: "Compact" },
-        { id: "large", name: "Large" },
-        { id: "huge", name: "Huge" },
-      ],
-    })
-  );
-  expect(getFields(state, cards.fragmentId)[0]).toEqual({
-    id: size.result.fieldId,
-    name: "size",
-    type: "variant",
-    options: [
-      { id: "small", name: "Compact" },
-      { id: "large", name: "Large" },
-      { id: "huge", name: "Huge" },
-    ],
-    defaultValue: { type: "literal", value: "large" },
-  });
-  state = apply(
-    state,
-    setCustomSlotFieldValue(
-      state,
-      {
-        slotId: cards.second,
-        fieldId: size.result.fieldId,
-        value: { type: "literal", value: "small" },
-      },
-      cards.context
-    )
-  );
-  expect(getValues(state, cards.second)).toEqual({
-    [size.result.fieldId]: { type: "literal", value: "small" },
-  });
-});
-
-test("elements inside a component offer its variants as style states", () => {
-  const cards = createCards();
-  const size = createCustomSlotField(
+  const size = createBuilderComponentField(
     cards.state,
     {
       fragmentId: cards.fragmentId,
       name: "buttonSize",
-      type: "variant",
-      options: [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
-      ],
+      type: "choice",
+      choices: ["small", "large"],
     },
     cards.context
   );
@@ -525,84 +465,86 @@ test("elements inside a component offer its variants as style states", () => {
     WebstudioData,
     "instances" | "dataSources"
   >;
+  const { fieldId } = size.result;
   expect(
-    getCustomSlotVariantStates({
+    getBuilderComponentChoiceStates({
       ...state,
       instanceSelector: ["button", cards.fragmentId, cards.first, "body"],
     })
   ).toEqual([
     {
-      label: "Button Size: Small",
-      selector: ':is([data-ws-variant~="small"] *)',
+      label: "buttonSize: small",
+      selector: getBuilderComponentChoiceState(fieldId, "small"),
     },
     {
-      label: "Button Size: Large",
-      selector: ':is([data-ws-variant~="large"] *)',
+      label: "buttonSize: large",
+      selector: getBuilderComponentChoiceState(fieldId, "large"),
     },
   ]);
   // the copy itself and elements outside the component have none
   expect(
-    getCustomSlotVariantStates({
+    getBuilderComponentChoiceStates({
       ...state,
       instanceSelector: [cards.first, "body"],
     })
   ).toEqual([]);
 });
 
-test("variant style states pass Webstudio style validation", () => {
+test("choice conditions pass Webstudio style validation", () => {
   expect(
     styleUpdateInput.safeParse({
       instanceId: "button",
       property: "backgroundColor",
       value: { type: "keyword", value: "red" },
-      state: ':is([data-ws-variant~="small"] *)',
+      state: getBuilderComponentChoiceState("size-id", "extra large"),
     }).success
   ).toBe(true);
 });
 
-test("styling inside a copy edits the variant that copy uses", () => {
+test("styling inside a copy edits the choice value that copy uses", () => {
   const cards = createCards();
   let state = cards.state;
-  const variant = createCustomSlotField(
+  const size = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
-      name: "variant",
-      type: "variant",
-      options: [{ id: "small", name: "Small" }],
+      name: "size",
+      type: "choice",
+      choices: ["small", "large"],
+      defaultValue: { type: "literal", value: "small" },
     },
     cards.context
   );
-  state = apply(state, variant);
+  state = apply(state, size);
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
-        fieldId: variant.result.fieldId,
-        value: { type: "literal", value: "small" },
+        fieldId: size.result.fieldId,
+        value: { type: "literal", value: "large" },
       },
       cards.context
     )
   );
   const data = state as Pick<WebstudioData, "instances" | "dataSources">;
   expect(
-    getCustomSlotActiveVariantState({
+    getBuilderComponentActiveChoiceState({
       ...data,
       instanceSelector: ["button", cards.fragmentId, cards.first, "body"],
     })
-  ).toEqual(':is([data-ws-variant~="small"] *)');
-  // a copy on the base design edits base styles
+  ).toEqual(getBuilderComponentChoiceState(size.result.fieldId, "large"));
+  // a copy using the default edits the base styles
   expect(
-    getCustomSlotActiveVariantState({
+    getBuilderComponentActiveChoiceState({
       ...data,
       instanceSelector: ["button", cards.fragmentId, cards.second, "body"],
     })
   ).toBeUndefined();
   // selecting the copy itself is not inside the component
   expect(
-    getCustomSlotActiveVariantState({
+    getBuilderComponentActiveChoiceState({
       ...data,
       instanceSelector: [cards.first, "body"],
     })
@@ -611,7 +553,7 @@ test("styling inside a copy edits the variant that copy uses", () => {
 
 test("a property can be created with a known id", () => {
   const cards = createCards();
-  const field = createCustomSlotField(
+  const field = createBuilderComponentField(
     cards.state,
     { fragmentId: cards.fragmentId, fieldId: "chosen-id", name: "variant" },
     cards.context
@@ -622,7 +564,7 @@ test("a property can be created with a known id", () => {
 test("boolean properties store real booleans per copy", () => {
   const cards = createCards();
   let state = cards.state;
-  const showIcon = createCustomSlotField(
+  const showIcon = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -635,7 +577,7 @@ test("boolean properties store real booleans per copy", () => {
   state = apply(state, showIcon);
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.second,
@@ -653,10 +595,10 @@ test("boolean properties store real booleans per copy", () => {
 test("a nested copy connects to its parent component, not to itself", () => {
   const cards = createCards();
   const data = cards.state as Pick<WebstudioData, "instances" | "dataSources">;
-  const outerComponentId = findCustomSlotDataSource(
+  const outerComponentId = findBuilderComponentDataSource(
     data.dataSources,
     cards.fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   )?.id;
   // a nested component's own parameter is also in scope of its copy
   const innerDataSources = new Map(data.dataSources)
@@ -664,24 +606,24 @@ test("a nested copy connects to its parent component, not to itself", () => {
       type: "parameter",
       id: "inner-component",
       scopeInstanceId: "inner-fragment",
-      name: customSlotComponentVariable,
+      name: builderComponentParameterVariable,
     })
     .set("inner-schema", {
       type: "variable",
       id: "inner-schema",
       scopeInstanceId: "inner-fragment",
-      name: customSlotSchemaVariable,
+      name: builderComponentSchemaVariable,
       value: { type: "json", value: [] },
     });
   expect(
-    findCustomSlotConnection({
+    findBuilderComponentConnection({
       dataSources: innerDataSources,
       availableDataSourceIds: ["inner-component", outerComponentId ?? ""],
       excludeFragmentId: "inner-fragment",
     })?.fragmentId
   ).toEqual(cards.fragmentId);
   expect(
-    findCustomSlotConnection({
+    findBuilderComponentConnection({
       dataSources: innerDataSources,
       availableDataSourceIds: ["inner-component"],
       excludeFragmentId: "inner-fragment",
@@ -692,7 +634,7 @@ test("a nested copy connects to its parent component, not to itself", () => {
 test("edits to a nested copy are saved as overrides on its parent copy", () => {
   const cards = createCards();
   let state = cards.state;
-  const label = createCustomSlotField(
+  const label = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "label" },
     cards.context
@@ -704,13 +646,13 @@ test("edits to a nested copy are saved as overrides on its parent copy", () => {
     instances: new Map(state.instances).set("card-a", {
       type: "instance",
       id: "card-a",
-      component: "ws:customSlot",
+      component: "ws:builderComponent",
       children: [],
     }),
   };
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -723,10 +665,10 @@ test("edits to a nested copy are saved as overrides on its parent copy", () => {
   );
   // the nested copy's shared values are untouched
   expect(getValues(state, cards.first)).toEqual({});
-  const overrides = findCustomSlotDataSource(
+  const overrides = findBuilderComponentDataSource(
     state.dataSources ?? new Map(),
     "card-a",
-    "__customSlotOverrides"
+    "__builderComponentOverrides"
   );
   expect(overrides?.type === "variable" && overrides.value.value).toEqual({
     [cards.first]: {
@@ -736,7 +678,7 @@ test("edits to a nested copy are saved as overrides on its parent copy", () => {
   // resetting removes the override
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -747,28 +689,29 @@ test("edits to a nested copy are saved as overrides on its parent copy", () => {
       cards.context
     )
   );
-  const cleared = findCustomSlotDataSource(
+  const cleared = findBuilderComponentDataSource(
     state.dataSources ?? new Map(),
     "card-a",
-    "__customSlotOverrides"
+    "__builderComponentOverrides"
   );
   expect(cleared?.type === "variable" && cleared.value.value).toEqual({});
 });
 
-test("styling inside a nested copy edits the variant its parent copy picked", () => {
+test("styling inside a nested copy edits the value its parent copy picked", () => {
   const cards = createCards();
   let state = cards.state;
-  const variant = createCustomSlotField(
+  const style = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
-      name: "variant",
-      type: "variant",
-      options: [{ id: "outline", name: "Outline" }],
+      name: "style",
+      type: "choice",
+      choices: ["filled", "outline"],
+      defaultValue: { type: "literal", value: "filled" },
     },
     cards.context
   );
-  state = apply(state, variant);
+  state = apply(state, style);
   // cards.first is a nested button shown inside "card-a" > "card-fragment"
   state = {
     ...state,
@@ -776,7 +719,7 @@ test("styling inside a nested copy edits the variant its parent copy picked", ()
       .set("card-a", {
         type: "instance",
         id: "card-a",
-        component: "ws:customSlot",
+        component: "ws:builderComponent",
         children: [{ type: "id", value: "card-fragment" }],
       })
       .set("card-fragment", {
@@ -788,11 +731,11 @@ test("styling inside a nested copy edits the variant its parent copy picked", ()
   };
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
-        fieldId: variant.result.fieldId,
+        fieldId: style.result.fieldId,
         value: { type: "literal", value: "outline" },
         override: { ownerSlotId: "card-a", key: cards.first },
       },
@@ -801,7 +744,7 @@ test("styling inside a nested copy edits the variant its parent copy picked", ()
   );
   const data = state as Pick<WebstudioData, "instances" | "dataSources">;
   expect(
-    getCustomSlotActiveVariantState({
+    getBuilderComponentActiveChoiceState({
       ...data,
       instanceSelector: [
         "button",
@@ -812,13 +755,13 @@ test("styling inside a nested copy edits the variant its parent copy picked", ()
         "body",
       ],
     })
-  ).toEqual(':is([data-ws-variant~="outline"] *)');
+  ).toEqual(getBuilderComponentChoiceState(style.result.fieldId, "outline"));
 });
 
 test("HTML Embed property values are validated like an HTML Embed", () => {
   const cards = createCards();
   let state = cards.state;
-  const icon = createCustomSlotField(
+  const icon = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "icon", type: "html" },
     cards.context
@@ -828,7 +771,7 @@ test("HTML Embed property values are validated like an HTML Embed", () => {
     value: string,
     override?: { ownerSlotId: string; key: string }
   ) =>
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -851,7 +794,7 @@ test("HTML Embed property values are validated like an HTML Embed", () => {
     instances: new Map(state.instances).set("card-a", {
       type: "instance",
       id: "card-a",
-      component: "ws:customSlot",
+      component: "ws:builderComponent",
       children: [],
     }),
   };
@@ -860,7 +803,7 @@ test("HTML Embed property values are validated like an HTML Embed", () => {
   ).toThrow("Entered HTML has a validation error.");
   // defaults are validated too
   expect(() =>
-    createCustomSlotField(
+    createBuilderComponentField(
       state,
       {
         fragmentId: cards.fragmentId,
@@ -873,102 +816,59 @@ test("HTML Embed property values are validated like an HTML Embed", () => {
   ).toThrow("Entered HTML has a validation error.");
 });
 
-test("the base variant can be renamed and reset", () => {
-  const cards = createCards();
-  let state = cards.state;
-  const variant = createCustomSlotField(
-    state,
-    {
-      fragmentId: cards.fragmentId,
-      name: "variant",
-      type: "variant",
-      options: [],
-      baseName: "Primary",
-    },
-    cards.context
-  );
-  state = apply(state, variant);
-  expect(getFields(state, cards.fragmentId)[0]?.baseName).toEqual("Primary");
-  state = apply(
-    state,
-    updateCustomSlotField(state, {
-      fragmentId: cards.fragmentId,
-      fieldId: variant.result.fieldId,
-      baseName: "Default",
-    })
-  );
-  expect(getFields(state, cards.fragmentId)[0]?.baseName).toEqual("Default");
-  // an empty name goes back to "Base"
-  state = apply(
-    state,
-    updateCustomSlotField(state, {
-      fragmentId: cards.fragmentId,
-      fieldId: variant.result.fieldId,
-      baseName: "",
-    })
-  );
-  expect(getFields(state, cards.fragmentId)[0]?.baseName).toBeUndefined();
-});
-
-test("deleting a variant removes its styles and resets copies using it", () => {
+test("deleting a choice property removes the styles of its values", () => {
   const cards = createCards();
   let state: BuilderState = { ...cards.state, styles: new Map() };
-  const variant = createCustomSlotField(
+  const size = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
-      name: "variant",
-      type: "variant",
-      options: [
-        { id: "small", name: "Small" },
-        { id: "large", name: "Large" },
-      ],
+      name: "size",
+      type: "choice",
+      choices: ["small", "large"],
     },
     cards.context
   );
-  state = apply(state, variant);
-  state = apply(
-    state,
-    setCustomSlotFieldValue(
-      state,
-      {
-        slotId: cards.second,
-        fieldId: variant.result.fieldId,
-        value: { type: "literal", value: "large" },
-      },
-      cards.context
-    )
-  );
-  const styleDecl = (state: string) => ({
+  state = apply(state, size);
+  const styleDecl = (state: undefined | string) => ({
     styleSourceId: "button-local",
     breakpointId: "base",
     property: "fontSize" as const,
     value: { type: "unit" as const, unit: "px" as const, value: 20 },
     state,
   });
-  const small = styleDecl(getCustomSlotVariantState("small"));
-  const large = styleDecl(getCustomSlotVariantState("large"));
+  const base = styleDecl(undefined);
+  const large = styleDecl(
+    `${getBuilderComponentChoiceState(size.result.fieldId, "large")}:hover`
+  );
   state.styles = new Map([
-    [getStyleDeclKey(small), small],
+    [getStyleDeclKey(base), base],
     [getStyleDeclKey(large), large],
   ]);
-
+  // removing a choice keeps its styles, so adding it back restores them
   state = apply(
     state,
-    updateCustomSlotField(state, {
+    updateBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
-      fieldId: variant.result.fieldId,
-      options: [{ id: "small", name: "Small" }],
+      fieldId: size.result.fieldId,
+      choices: ["small"],
     })
   );
-  expect(Array.from(state.styles?.values() ?? [])).toEqual([small]);
-  expect(getValues(state, cards.second)).toEqual({});
+  expect(state.styles?.size).toEqual(2);
+  state = apply(
+    state,
+    deleteBuilderComponentField(state, {
+      fragmentId: cards.fragmentId,
+      fieldId: size.result.fieldId,
+    })
+  );
+  expect(Array.from(state.styles?.values() ?? [])).toEqual([base]);
 });
 
 test("deleting a property keeps parent copy overrides", () => {
   const cards = createCards();
   let state: BuilderState = { ...cards.state, styles: new Map() };
-  const label = createCustomSlotField(
+  const label = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "label" },
     cards.context
@@ -980,7 +880,7 @@ test("deleting a property keeps parent copy overrides", () => {
     type: "variable",
     id: "parent-overrides",
     scopeInstanceId: "parent-card",
-    name: customSlotOverridesVariable,
+    name: builderComponentOverridesVariable,
     value: {
       type: "json",
       value: {
@@ -992,7 +892,7 @@ test("deleting a property keeps parent copy overrides", () => {
   });
   state = apply(
     state,
-    deleteCustomSlotField(state, {
+    deleteBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
       fieldId: label.result.fieldId,
     })
@@ -1009,7 +909,7 @@ test("defaults are fixed values and names cannot reuse a component variable", ()
   const cards = createCards();
   let state = cards.state;
   expect(() =>
-    createCustomSlotField(
+    createBuilderComponentField(
       state,
       {
         fragmentId: cards.fragmentId,
@@ -1028,7 +928,7 @@ test("defaults are fixed values and names cannot reuse a component variable", ()
     value: { type: "number", value: 0 },
   });
   expect(() =>
-    createCustomSlotField(
+    createBuilderComponentField(
       state,
       { fragmentId: cards.fragmentId, name: "count" },
       cards.context
@@ -1039,7 +939,7 @@ test("defaults are fixed values and names cannot reuse a component variable", ()
 test("changing a type or removing a choice keeps copy values", () => {
   const cards = createCards();
   let state: BuilderState = { ...cards.state, styles: new Map() };
-  const size = createCustomSlotField(
+  const size = createBuilderComponentField(
     state,
     {
       fragmentId: cards.fragmentId,
@@ -1053,7 +953,7 @@ test("changing a type or removing a choice keeps copy values", () => {
   state = apply(state, size);
   state = apply(
     state,
-    setCustomSlotFieldValue(
+    setBuilderComponentFieldValue(
       state,
       {
         slotId: cards.first,
@@ -1065,7 +965,7 @@ test("changing a type or removing a choice keeps copy values", () => {
   );
   state = apply(
     state,
-    updateCustomSlotField(state, {
+    updateBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
       fieldId: size.result.fieldId,
       choices: ["small"],
@@ -1080,7 +980,7 @@ test("changing a type or removing a choice keeps copy values", () => {
   });
   state = apply(
     state,
-    updateCustomSlotField(state, {
+    updateBuilderComponentField(state, {
       fragmentId: cards.fragmentId,
       fieldId: size.result.fieldId,
       type: "number",
@@ -1094,7 +994,7 @@ test("changing a type or removing a choice keeps copy values", () => {
 test("renaming a property updates nested copies filled from it", () => {
   const cards = createCards();
   let state = cards.state;
-  const title = createCustomSlotField(
+  const title = createBuilderComponentField(
     state,
     { fragmentId: cards.fragmentId, name: "title" },
     cards.context
@@ -1109,7 +1009,7 @@ test("renaming a property updates nested copies filled from it", () => {
   state.instances?.set("nested", {
     type: "instance",
     id: "nested",
-    component: "ws:customSlot",
+    component: "ws:builderComponent",
     children: [],
   });
   state.instances?.set("button", {
@@ -1120,7 +1020,7 @@ test("renaming a property updates nested copies filled from it", () => {
     type: "variable",
     id: "nested-values",
     scopeInstanceId: "nested",
-    name: customSlotValuesVariable,
+    name: builderComponentValuesVariable,
     value: {
       type: "json",
       value: {
@@ -1130,7 +1030,7 @@ test("renaming a property updates nested copies filled from it", () => {
   });
   state = apply(
     state,
-    updateCustomSlotField(
+    updateBuilderComponentField(
       { ...state, styles: new Map() },
       {
         fragmentId: cards.fragmentId,

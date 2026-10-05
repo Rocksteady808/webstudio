@@ -1,19 +1,19 @@
 import { expect, test } from "vitest";
 import {
   ROOT_INSTANCE_ID,
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotValuesVariable,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentValuesVariable,
   encodeDataVariableId,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
+  findBuilderComponentDataSource,
+  getBuilderComponentContentRootId,
   type WebstudioData,
 } from "@webstudio-is/sdk";
 import { applyBuilderPatchTransactions } from "../state/patch";
 import type { BuilderState } from "../state/builder-state";
 import type { BuilderRuntimeMutation } from "./mutation";
-import { getCustomSlotProperties } from "./custom-slot-fields";
-import { createComponentFromInstance } from "./custom-slot-create";
+import { getBuilderComponentProperties } from "./builder-component-fields";
+import { createComponentFromInstance } from "./builder-component-create";
 
 const createIdFactory = () => {
   let index = 0;
@@ -112,9 +112,9 @@ test("turns an element into a component and leaves a copy in its place", () => {
     { type: "id", value: copyId },
     { type: "id", value: "after" },
   ]);
-  expect(next.instances?.get(copyId)?.component).toEqual(customSlotComponent);
+  expect(next.instances?.get(copyId)?.component).toEqual(builderComponent);
   expect(
-    getCustomSlotContentRootId(next.instances ?? new Map(), copyId)
+    getBuilderComponentContentRootId(next.instances ?? new Map(), copyId)
   ).toEqual(fragmentId);
   // the card itself, its children and settings are kept unchanged
   expect(next.instances?.get(fragmentId)).toMatchObject({
@@ -125,7 +125,7 @@ test("turns an element into a component and leaves a copy in its place", () => {
   expect(next.instances?.get("card")).toEqual(state.instances?.get("card"));
   expect(next.props?.get("heading-id")).toEqual(state.props?.get("heading-id"));
   expect(
-    getCustomSlotProperties({
+    getBuilderComponentProperties({
       instances: next.instances ?? new Map(),
       dataSources: next.dataSources ?? new Map(),
       slotId: copyId,
@@ -183,17 +183,17 @@ test("variables from the page become properties the copy keeps filling", () => {
   );
   const next = apply(state, mutation);
   const [copyId] = mutation.result.instanceSelector;
-  const component = findCustomSlotDataSource(
+  const component = findBuilderComponentDataSource(
     next.dataSources ?? new Map(),
     mutation.result.fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   );
   const componentRef = encodeDataVariableId(component?.id ?? "");
   // global variables stay, page variables are read through a property
   expect(next.instances?.get("heading")?.children).toEqual([
     { type: "expression", value: `${componentRef}.pageTitle + ${brand}` },
   ]);
-  const properties = getCustomSlotProperties({
+  const properties = getBuilderComponentProperties({
     instances: next.instances ?? new Map(),
     dataSources: next.dataSources ?? new Map(),
     slotId: copyId,
@@ -205,10 +205,10 @@ test("variables from the page become properties the copy keeps filling", () => {
     },
   ]);
   expect(
-    findCustomSlotDataSource(
+    findBuilderComponentDataSource(
       next.dataSources ?? new Map(),
       copyId,
-      customSlotValuesVariable
+      builderComponentValuesVariable
     )?.scopeInstanceId
   ).toEqual(copyId);
 });

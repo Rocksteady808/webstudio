@@ -1,12 +1,15 @@
 import { expect, test } from "vitest";
 import type { DataSource, DataSources } from "./schema/data-sources";
-import { findCustomSlotDataSource, getCustomSlotTag } from "./custom-slot";
+import {
+  findBuilderComponentDataSource,
+  getBuilderComponentTag,
+} from "./builder-component";
 
 const values = (id: string, scope: string, value: number): DataSource => ({
   type: "variable",
   id,
   scopeInstanceId: scope,
-  name: "__customSlotValues",
+  name: "__builderComponentValues",
   value: { type: "json", value },
 });
 
@@ -16,38 +19,70 @@ test("finds a copy's data source by scope and name", () => {
     ["b", values("b", "card-b", 2)],
   ]);
   expect(
-    findCustomSlotDataSource(dataSources, "card-b", "__customSlotValues")?.id
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-b",
+      "__builderComponentValues"
+    )?.id
   ).toEqual("b");
   expect(
-    findCustomSlotDataSource(dataSources, "card-c", "__customSlotValues")
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-c",
+      "__builderComponentValues"
+    )
   ).toBeUndefined();
 });
 
 test("stays correct when the same map is changed in place", () => {
   const dataSources: DataSources = new Map([["a", values("a", "card-a", 1)]]);
-  findCustomSlotDataSource(dataSources, "card-a", "__customSlotValues");
+  findBuilderComponentDataSource(
+    dataSources,
+    "card-a",
+    "__builderComponentValues"
+  );
   // replace a value
   dataSources.set("a", values("a", "card-a", 2));
   expect(
-    findCustomSlotDataSource(dataSources, "card-a", "__customSlotValues")
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-a",
+      "__builderComponentValues"
+    )
   ).toEqual(values("a", "card-a", 2));
   // add a data source
   dataSources.set("b", values("b", "card-b", 3));
   expect(
-    findCustomSlotDataSource(dataSources, "card-b", "__customSlotValues")?.id
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-b",
+      "__builderComponentValues"
+    )?.id
   ).toEqual("b");
   // remove a data source
   dataSources.delete("a");
   expect(
-    findCustomSlotDataSource(dataSources, "card-a", "__customSlotValues")
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-a",
+      "__builderComponentValues"
+    )
   ).toBeUndefined();
   // move a data source to another scope without changing the size
   dataSources.set("b", values("b", "card-c", 3));
   expect(
-    findCustomSlotDataSource(dataSources, "card-b", "__customSlotValues")
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-b",
+      "__builderComponentValues"
+    )
   ).toBeUndefined();
   expect(
-    findCustomSlotDataSource(dataSources, "card-c", "__customSlotValues")?.id
+    findBuilderComponentDataSource(
+      dataSources,
+      "card-c",
+      "__builderComponentValues"
+    )?.id
   ).toEqual("b");
 });
 
@@ -67,17 +102,21 @@ test("looks up many copies without rescanning every data source", () => {
     },
   });
   for (let index = 0; index < 5000; index += 1) {
-    findCustomSlotDataSource(counted, `card-${index}`, "__customSlotValues");
+    findBuilderComponentDataSource(
+      counted,
+      `card-${index}`,
+      "__builderComponentValues"
+    );
   }
   // one scan to build the index instead of one scan per copy
   expect(reads).toBeLessThanOrEqual(2);
 });
 
 test("a copy renders as its chosen tag, or adds no element", () => {
-  expect(getCustomSlotTag(undefined)).toBeUndefined();
-  expect(getCustomSlotTag("li")).toBe("li");
-  expect(getCustomSlotTag("article")).toBe("article");
+  expect(getBuilderComponentTag(undefined)).toBeUndefined();
+  expect(getBuilderComponentTag("li")).toBe("li");
+  expect(getBuilderComponentTag("article")).toBe("article");
   // anything outside the allowed tags renders no element of its own
-  expect(getCustomSlotTag("script")).toBeUndefined();
-  expect(getCustomSlotTag('div onclick="x"')).toBeUndefined();
+  expect(getBuilderComponentTag("script")).toBeUndefined();
+  expect(getBuilderComponentTag('div onclick="x"')).toBeUndefined();
 });

@@ -63938,7 +63938,7 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
-    id: "customSlots.createComponent",
+    id: "builderComponents.createComponent",
     command: "create-component",
     client: "createComponentFromInstance",
     kind: "mutation",
@@ -63988,7 +63988,7 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
-    id: "customSlots.exposeProperties",
+    id: "builderComponents.exposeProperties",
     command: "expose-component-properties",
     client: "exposeComponentProperties",
     kind: "mutation",
@@ -64023,7 +64023,15 @@ export const runtimeOperationContractData = [
               type: {
                 description: "Property type when the setting has no value yet",
                 type: "string",
-                enum: ["text", "number", "boolean", "link", "image", "json"],
+                enum: [
+                  "text",
+                  "richText",
+                  "number",
+                  "boolean",
+                  "link",
+                  "image",
+                  "json",
+                ],
               },
             },
             required: ["propName", "name"],
@@ -64051,9 +64059,9 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
-    id: "customSlots.createField",
-    command: "create-custom-slot-field",
-    client: "createCustomSlotField",
+    id: "builderComponents.createField",
+    command: "create-builder-component-field",
+    client: "createBuilderComponentField",
     kind: "mutation",
     inputSchema: {
       type: "object",
@@ -64076,6 +64084,7 @@ export const runtimeOperationContractData = [
           type: "string",
           enum: [
             "text",
+            "richText",
             "number",
             "link",
             "html",
@@ -64083,31 +64092,7 @@ export const runtimeOperationContractData = [
             "image",
             "json",
             "choice",
-            "variant",
           ],
-        },
-        options: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: {
-                type: "string",
-                pattern: "^[A-Za-z0-9_-]+$",
-              },
-              name: {
-                type: "string",
-                minLength: 1,
-              },
-            },
-            required: ["id", "name"],
-          },
-          description: "Choices of a variant property, e.g. Small and Large",
-        },
-        baseName: {
-          description:
-            "Name of the design without a variant; empty resets to Base",
-          type: "string",
         },
         choices: {
           type: "array",
@@ -64213,9 +64198,9 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
-    id: "customSlots.updateField",
-    command: "update-custom-slot-field",
-    client: "updateCustomSlotField",
+    id: "builderComponents.updateField",
+    command: "update-builder-component-field",
+    client: "updateBuilderComponentField",
     kind: "mutation",
     inputSchema: {
       type: "object",
@@ -64236,6 +64221,7 @@ export const runtimeOperationContractData = [
           type: "string",
           enum: [
             "text",
+            "richText",
             "number",
             "link",
             "html",
@@ -64243,31 +64229,7 @@ export const runtimeOperationContractData = [
             "image",
             "json",
             "choice",
-            "variant",
           ],
-        },
-        options: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: {
-                type: "string",
-                pattern: "^[A-Za-z0-9_-]+$",
-              },
-              name: {
-                type: "string",
-                minLength: 1,
-              },
-            },
-            required: ["id", "name"],
-          },
-          description: "Choices of a variant property, e.g. Small and Large",
-        },
-        baseName: {
-          description:
-            "Name of the design without a variant; empty resets to Base",
-          type: "string",
         },
         choices: {
           type: "array",
@@ -64377,9 +64339,9 @@ export const runtimeOperationContractData = [
     retryOnConflict: false,
   },
   {
-    id: "customSlots.deleteField",
-    command: "delete-custom-slot-field",
-    client: "deleteCustomSlotField",
+    id: "builderComponents.deleteField",
+    command: "delete-builder-component-field",
+    client: "deleteBuilderComponentField",
     kind: "mutation",
     inputSchema: {
       type: "object",
@@ -64412,9 +64374,9 @@ export const runtimeOperationContractData = [
     requiresConfirm: true,
   },
   {
-    id: "customSlots.setFieldValue",
-    command: "set-custom-slot-field-value",
-    client: "setCustomSlotFieldValue",
+    id: "builderComponents.setFieldValue",
+    command: "set-builder-component-field-value",
+    client: "setBuilderComponentFieldValue",
     kind: "mutation",
     inputSchema: {
       type: "object",

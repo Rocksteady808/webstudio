@@ -16,22 +16,22 @@ import {
   portalComponent,
   ROOT_INSTANCE_ID,
   SYSTEM_VARIABLE_ID,
-  customSlotComponent,
-  customSlotComponentVariable,
-  resolveCustomSlotFields,
+  builderComponent,
+  builderComponentParameterVariable,
+  resolveBuilderComponentFields,
   type DataSources,
-  getCustomSlotCopy,
-  getCustomSlotEnclosingCopies,
-  customSlotVariantAttribute,
-  getCustomSlotVariantAttribute,
-  getCustomSlotPageHref,
-  type CustomSlotPageLink,
+  getBuilderComponentCopy,
+  getBuilderComponentEnclosingCopies,
+  builderComponentChoiceAttribute,
+  getBuilderComponentChoiceAttribute,
+  getBuilderComponentPageHref,
+  type BuilderComponentPageLink,
   type Assets,
   type Pages,
   type Props,
 } from "@webstudio-is/sdk";
 import { transpileExpression } from "@webstudio-is/expression";
-import { isCustomSlotInternalVariable } from "@webstudio-is/project-build/runtime";
+import { isBuilderComponentInternalVariable } from "@webstudio-is/project-build/runtime";
 import {
   normalizeProps,
   textContentAttribute,
@@ -361,46 +361,49 @@ export const $unscopedVariableValues = computed(
  */
 
 // the same URL normalizeProps gives a regular Image src asset
-const createCustomSlotAssetResolver = (assets: Assets) => (assetId: string) => {
-  const asset = assets.get(assetId);
-  return asset === undefined ? undefined : `${assetBaseUrl}${asset.name}`;
-};
+const createBuilderComponentAssetResolver =
+  (assets: Assets) => (assetId: string) => {
+    const asset = assets.get(assetId);
+    return asset === undefined ? undefined : `${assetBaseUrl}${asset.name}`;
+  };
 
-const createCustomSlotPageResolver =
-  (pages: undefined | Pages, props: Props) => (value: CustomSlotPageLink) =>
+const createBuilderComponentPageResolver =
+  (pages: undefined | Pages, props: Props) =>
+  (value: BuilderComponentPageLink) =>
     pages === undefined
       ? undefined
-      : getCustomSlotPageHref({ value, pages, props: props.values() });
+      : getBuilderComponentPageHref({ value, pages, props: props.values() });
 
 /**
- * Only the data sources Custom Slots read, kept as the same map while they
+ * Only the data sources Builder components read, kept as the same map while they
  * do not change, so props are not recomputed for every variable edit and
- * projects without Custom Slots never recompute because of them.
+ * projects without Builder components never recompute because of them.
  */
-let previousCustomSlotDataSources: DataSources = new Map();
-const $customSlotDataSources = computed($dataSources, (dataSources) => {
+let previousBuilderComponentDataSources: DataSources = new Map();
+const $builderComponentDataSources = computed($dataSources, (dataSources) => {
   const next: DataSources = new Map();
   for (const dataSource of dataSources.values()) {
     if (
-      isCustomSlotInternalVariable(dataSource) ||
+      isBuilderComponentInternalVariable(dataSource) ||
       (dataSource.type === "parameter" &&
-        dataSource.name === customSlotComponentVariable)
+        dataSource.name === builderComponentParameterVariable)
     ) {
       next.set(dataSource.id, dataSource);
     }
   }
   const unchanged =
-    next.size === previousCustomSlotDataSources.size &&
+    next.size === previousBuilderComponentDataSources.size &&
     Array.from(next).every(
-      ([id, dataSource]) => previousCustomSlotDataSources.get(id) === dataSource
+      ([id, dataSource]) =>
+        previousBuilderComponentDataSources.get(id) === dataSource
     );
   if (unchanged === false) {
-    previousCustomSlotDataSources = next;
+    previousBuilderComponentDataSources = next;
   }
-  return previousCustomSlotDataSources;
+  return previousBuilderComponentDataSources;
 });
 
-export const __testing__ = { $customSlotDataSources };
+export const __testing__ = { $builderComponentDataSources };
 
 const $propValuesInput = computed(
   [
@@ -412,7 +415,7 @@ const $propValuesInput = computed(
     $assets,
     $uploadingFilesDataStore,
     $externalContentRoots,
-    $customSlotDataSources,
+    $builderComponentDataSources,
   ],
   (
     instances,
@@ -448,9 +451,13 @@ const computePropValues = async ({
   externalContentRoots,
   dataSources,
 }: ReturnType<typeof $propValuesInput.get>) => {
-  const resolveCustomSlotPage = createCustomSlotPageResolver(pages, props);
-  const resolveCustomSlotAsset = createCustomSlotAssetResolver(assets);
-  // global data sources, collected once instead of once per Custom Slot copy
+  const resolveBuilderComponentPage = createBuilderComponentPageResolver(
+    pages,
+    props
+  );
+  const resolveBuilderComponentAsset =
+    createBuilderComponentAssetResolver(assets);
+  // global data sources, collected once instead of once per Builder component copy
   let globalDataSourceIds: undefined | DataSource["id"][];
   const getGlobalDataSourceIds = () => {
     globalDataSourceIds ??= Array.from($dataSources.get().values())
@@ -576,13 +583,13 @@ const computePropValues = async ({
       }
       return;
     }
-    if (instance.component === customSlotComponent) {
+    if (instance.component === builderComponent) {
       // a nested copy shows the overrides its parent copies set for it
-      const copy = getCustomSlotCopy({
+      const copy = getBuilderComponentCopy({
         instances,
         dataSources,
         slotId: instanceId,
-        enclosingCopyIds: getCustomSlotEnclosingCopies(
+        enclosingCopyIds: getBuilderComponentEnclosingCopies(
           instances,
           instanceSelector
         ),
@@ -593,22 +600,28 @@ const computePropValues = async ({
       const { fragment: root, component, fields } = copy;
       const rootId = root.id;
       const localValues = copy.values;
-      // the copy's variants decide which variant styles apply inside
-      const variantAttribute = getCustomSlotVariantAttribute(
-        fields,
-        localValues
-      );
-      if (variantAttribute.length > 0) {
-        propValues.set(customSlotVariantAttribute, variantAttribute);
-      }
-      const componentValue = await resolveCustomSlotFields({
+      const componentValue = await resolveBuilderComponentFields({
         fields,
         values: localValues,
         evaluateExpression: (expression) =>
           computeExpression(expression, currentVariableValues),
-        resolvePage: resolveCustomSlotPage,
-        resolveAsset: resolveCustomSlotAsset,
+        resolvePage: resolveBuilderComponentPage,
+        resolveAsset: resolveBuilderComponentAsset,
       });
+      // the copy's choice values decide which value styles apply inside,
+      // including values bound to data
+      const choiceAttribute = getBuilderComponentChoiceAttribute(
+        fields,
+        Object.fromEntries(
+          fields.map((field) => [
+            field.id,
+            { type: "literal" as const, value: componentValue[field.name] },
+          ])
+        )
+      );
+      if (choiceAttribute.length > 0) {
+        propValues.set(builderComponentChoiceAttribute, choiceAttribute);
+      }
       const childVariableValues = new Map<string, unknown>();
       childVariableValues.set(
         SYSTEM_VARIABLE_ID,
@@ -736,12 +749,12 @@ const computeVariableValues = async ({
   system,
   externalContentRoots,
 }: ReturnType<typeof $variableValuesInput.get>) => {
-  // read pages and assets only when a Custom Slot link or image needs them,
-  // so projects without Custom Slots do not recompute on every upload
-  const resolveCustomSlotPage = (value: CustomSlotPageLink) =>
-    createCustomSlotPageResolver($pages.get(), props)(value);
-  const resolveCustomSlotAsset = (assetId: string) =>
-    createCustomSlotAssetResolver($assets.get())(assetId);
+  // read pages and assets only when a Builder component link or image needs them,
+  // so projects without Builder components do not recompute on every upload
+  const resolveBuilderComponentPage = (value: BuilderComponentPageLink) =>
+    createBuilderComponentPageResolver($pages.get(), props)(value);
+  const resolveBuilderComponentAsset = (assetId: string) =>
+    createBuilderComponentAssetResolver($assets.get())(assetId);
   const propsByInstanceId = mapGroupBy(
     props.values(),
     (prop) => prop.instanceId
@@ -885,13 +898,13 @@ const computeVariableValues = async ({
       }
       return;
     }
-    if (instance.component === customSlotComponent) {
+    if (instance.component === builderComponent) {
       // a nested copy shows the overrides its parent copies set for it
-      const copy = getCustomSlotCopy({
+      const copy = getBuilderComponentCopy({
         instances,
         dataSources,
         slotId: instanceId,
-        enclosingCopyIds: getCustomSlotEnclosingCopies(
+        enclosingCopyIds: getBuilderComponentEnclosingCopies(
           instances,
           instanceSelector
         ),
@@ -902,13 +915,13 @@ const computeVariableValues = async ({
       const { fragment: root, component, fields } = copy;
       const rootId = root.id;
       const localValues = copy.values;
-      const componentValue = await resolveCustomSlotFields({
+      const componentValue = await resolveBuilderComponentFields({
         fields,
         values: localValues,
         evaluateExpression: (expression) =>
           computeExpression(expression, variableValues),
-        resolvePage: resolveCustomSlotPage,
-        resolveAsset: resolveCustomSlotAsset,
+        resolvePage: resolveBuilderComponentPage,
+        resolveAsset: resolveBuilderComponentAsset,
       });
       const ownerVariableValues = new Map(variableValues);
       ownerVariableValues.set(component.id, componentValue);

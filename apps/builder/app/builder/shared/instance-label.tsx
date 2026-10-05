@@ -26,10 +26,10 @@ import {
   TextItalicIcon,
 } from "@webstudio-is/icons/svg";
 import {
-  customSlotComponent,
+  builderComponent,
   elementComponent,
   getComponentName,
-  getCustomSlotContentRootId,
+  getBuilderComponentContentRootId,
   parseComponentName,
   ROOT_INSTANCE_ID,
   type Instance,
@@ -133,13 +133,13 @@ export const getInstanceLabel = (
   }
   // a copy is named after its component, like Figma instances
   if (
-    instanceOrInstanceId.component === customSlotComponent &&
+    instanceOrInstanceId.component === builderComponent &&
     instanceOrInstanceId.id !== undefined
   ) {
     const instances = $instances.get();
     return getComponentName(
       instances,
-      getCustomSlotContentRootId(instances, instanceOrInstanceId.id)
+      getBuilderComponentContentRootId(instances, instanceOrInstanceId.id)
     );
   }
   if (

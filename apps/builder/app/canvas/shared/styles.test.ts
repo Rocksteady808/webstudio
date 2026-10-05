@@ -868,7 +868,7 @@ describe("simulateConditionBreakpoints", () => {
   });
 });
 
-describe("Custom Slot variant states", () => {
+describe("Builder component variant states", () => {
   const box: Instance = {
     type: "instance",
     id: "box",
@@ -877,7 +877,7 @@ describe("Custom Slot variant states", () => {
   };
   const hoverStyle = createStyleDecl({
     styleSourceId: "local",
-    state: ':is([data-ws-variant~="reverse"] *):hover',
+    state: ':is([data-ws-props~="variant=reverse"] *):hover',
     property: "color",
     value: { type: "keyword", value: "red" },
   });
@@ -891,19 +891,23 @@ describe("Custom Slot variant states", () => {
     });
 
   test("a variant alone is not previewed, it already applies", () => {
-    expect(compute(':is([data-ws-variant~="reverse"] *)')).toBeUndefined();
+    expect(
+      compute(':is([data-ws-props~="variant=reverse"] *)')
+    ).toBeUndefined();
   });
 
   test("a variant's hover previews only in copies using the variant", () => {
     const sheet = createTestSheet();
     renderStateStyles({
-      instanceStyles: compute(':is([data-ws-variant~="reverse"] *):hover'),
+      instanceStyles: compute(
+        ':is([data-ws-props~="variant=reverse"] *):hover'
+      ),
       sheet,
       transformValue: mockTransformValue,
       toStyleValue: mockToStyleValue,
     });
     expect(sheet.cssText).toContain(
-      `[data-ws-variant~="reverse"] [data-ws-id="box"]`
+      `[data-ws-props~="variant=reverse"] [data-ws-id="box"]`
     );
     expect(sheet.cssText).toContain("color: red");
     expect(sheet.cssText).not.toContain(":hover");

@@ -1,24 +1,24 @@
 import type { Instance } from "./schema/instances";
 import type { WebstudioFragment } from "./schema/webstudio";
 import {
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
-} from "./custom-slot";
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
+} from "./builder-component";
 import type {
-  CustomSlotField,
-  CustomSlotFieldValues,
-} from "./custom-slot-fields";
+  BuilderComponentField,
+  BuilderComponentFieldValues,
+} from "./builder-component-fields";
 
 /**
- * Creates a new Custom Slot with its own shared Fragment.
+ * Creates a new Builder component with its own shared Fragment.
  *
- * Every id is generated, so independently inserted Custom Slots never share a
+ * Every id is generated, so independently inserted Builder components never share a
  * Fragment. Copies of an occurrence keep the Fragment id and therefore share
  * structure while keeping their own values.
  */
-export const createCustomSlotFragment = ({
+export const createBuilderComponentFragment = ({
   createId,
 }: {
   createId: () => string;
@@ -27,13 +27,13 @@ export const createCustomSlotFragment = ({
   const rootId = createId();
   const componentId = createId();
   // starts empty like a Slot: users build the content and add properties
-  const fields: CustomSlotField[] = [];
-  const values: CustomSlotFieldValues = {};
+  const fields: BuilderComponentField[] = [];
+  const values: BuilderComponentFieldValues = {};
   const instances: Instance[] = [
     {
       type: "instance",
       id: slotId,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: rootId }],
     },
     {
@@ -51,20 +51,20 @@ export const createCustomSlotFragment = ({
         type: "parameter",
         id: componentId,
         scopeInstanceId: rootId,
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
       },
       {
         type: "variable",
         id: createId(),
         scopeInstanceId: rootId,
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         value: { type: "json", value: fields },
       },
       {
         type: "variable",
         id: createId(),
         scopeInstanceId: slotId,
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         value: { type: "json", value: values },
       },
     ],

@@ -12,22 +12,29 @@ import {
   toast,
 } from "@webstudio-is/design-system";
 import {
-  customSlotComponent,
-  customSlotComponentVariable,
+  builderComponent,
+  builderComponentParameterVariable,
   encodeDataVariableId,
-  findCustomSlotDataSource,
+  findBuilderComponentDataSource,
   getComponentName,
   type PropMeta,
 } from "@webstudio-is/sdk";
 import { textContentAttribute } from "@webstudio-is/react-sdk";
-import { toCustomSlotFieldName } from "@webstudio-is/project-build/runtime";
+import { toBuilderComponentFieldName } from "@webstudio-is/project-build/runtime";
 import { $isDesignMode, $selectedInstanceSelector } from "~/shared/nano-states";
 import { $dataSources, $instances } from "~/shared/sync/data-stores";
 import { executeRuntimeMutation } from "~/shared/instance-utils/data";
 import type { PropAndMeta } from "./props-section/use-props-logic";
 import { humanizeAttribute } from "./shared";
 
-type ExposableType = "text" | "number" | "boolean" | "link" | "image" | "json";
+type ExposableType =
+  | "text"
+  | "richText"
+  | "number"
+  | "boolean"
+  | "link"
+  | "image"
+  | "json";
 
 /** The property type a setting becomes, or undefined when it cannot. */
 const getExposableType = (meta: PropMeta): undefined | ExposableType => {
@@ -44,6 +51,8 @@ const getExposableType = (meta: PropMeta): undefined | ExposableType => {
       return "boolean";
     case "url":
       return "link";
+    case "code":
+      return meta.language === "markdown" ? "richText" : "text";
     case "file":
       return meta.accept?.includes("image") ? "image" : "text";
     case "json":
@@ -72,12 +81,12 @@ const $enclosingComponent = computed(
       if (
         instances.get(fragmentId)?.component === "Fragment" &&
         instances.get(instanceSelector[index + 1])?.component ===
-          customSlotComponent
+          builderComponent
       ) {
-        const component = findCustomSlotDataSource(
+        const component = findBuilderComponentDataSource(
           dataSources,
           fragmentId,
-          customSlotComponentVariable
+          builderComponentParameterVariable
         );
         return {
           fragmentId,
@@ -123,7 +132,7 @@ const getCandidates = (
 };
 
 const getDefaultName = (candidate: Candidate) =>
-  toCustomSlotFieldName(
+  toBuilderComponentFieldName(
     candidate.propName === textContentAttribute ? "text" : candidate.label
   );
 
@@ -162,15 +171,16 @@ const ExposeForm = ({
   const expose = () => {
     try {
       executeRuntimeMutation({
-        id: "customSlots.exposeProperties",
+        id: "builderComponents.exposeProperties",
         input: {
           fragmentId,
           instanceId,
           properties: selected.map((candidate) => ({
             propName: candidate.propName,
             name:
-              toCustomSlotFieldName(names.get(candidate.propName) ?? "") ||
-              getDefaultName(candidate),
+              toBuilderComponentFieldName(
+                names.get(candidate.propName) ?? ""
+              ) || getDefaultName(candidate),
             type: candidate.type,
           })),
         },

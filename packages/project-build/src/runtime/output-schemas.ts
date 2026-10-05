@@ -578,19 +578,19 @@ export const runtimeOutputSchemas = {
   "instances.insertMdxText": mdxPasteResult,
   "slots.attach": looseObject({ slotId: id, fragmentId: id }),
   "slots.extract": looseObject({ slotId: id, fragmentId: id, instanceId: id }),
-  "customSlots.createComponent": looseObject({
+  "builderComponents.createComponent": looseObject({
     instanceSelector: stringArray,
     fragmentId: id,
     name: z.string(),
   }),
-  "customSlots.exposeProperties": looseObject({ fieldIds: stringArray }),
-  "customSlots.createField": looseObject({
+  "builderComponents.exposeProperties": looseObject({ fieldIds: stringArray }),
+  "builderComponents.createField": looseObject({
     fieldId: id,
     expression: z.string(),
   }),
-  "customSlots.updateField": looseObject({ fieldId: id }),
-  "customSlots.deleteField": looseObject({ fieldId: id }),
-  "customSlots.setFieldValue": looseObject({ slotId: id, fieldId: id }),
+  "builderComponents.updateField": looseObject({ fieldId: id }),
+  "builderComponents.deleteField": looseObject({ fieldId: id }),
+  "builderComponents.setFieldValue": looseObject({ slotId: id, fieldId: id }),
   "instances.move": instanceIdsResult,
   "instances.reparent": looseObject({
     instanceSelector: stringArray.optional(),

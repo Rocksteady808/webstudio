@@ -1,6 +1,6 @@
 import type { Patch } from "immer";
 import { isRecord } from "../shared/type-utils";
-import { applyCustomSlotContentModeDataSourcePatches } from "./custom-slot-content-mode";
+import { applyBuilderComponentContentModeDataSourcePatches } from "./builder-component-content-mode";
 import {
   instance,
   instanceChild,
@@ -11,7 +11,7 @@ import {
   pagePath,
   blockComponent,
   blockTemplateComponent,
-  customSlotComponent,
+  builderComponent,
   findContentBlockBodyContainers,
   findWritableContentBlockDocumentBindings,
   getHtmlTagsFromProps,
@@ -51,7 +51,7 @@ export type ContentModeCapabilities = {
   styleSourceSelections: StyleSourceSelections;
   styles: Styles;
   breakpoints?: Breakpoints;
-  /** needed to fill in Custom Slot copy values in content mode */
+  /** needed to fill in Builder component copy values in content mode */
   dataSources?: DataSources;
   contentRootIds: Set<Instance["id"]>;
   frontmatterBoundPropIds?: ReadonlySet<Prop["id"]>;
@@ -260,9 +260,9 @@ const getContentModeEditableInstanceRootIds = ({
     }
     editableInstanceIds.add(instanceId);
     rootIdsByInstanceId.set(instanceId, rootId);
-    // a Custom Slot's content is shared by every copy, so content editors
+    // a Builder component's content is shared by every copy, so content editors
     // fill in the copy's values instead of editing the shared design
-    if (instance.component === customSlotComponent) {
+    if (instance.component === builderComponent) {
       return;
     }
     for (const child of instance.children ?? []) {
@@ -1496,7 +1496,7 @@ const validatePatchChange = (
 
   if (change.namespace === "dataSources") {
     const { capabilities } = context;
-    const result = applyCustomSlotContentModeDataSourcePatches({
+    const result = applyBuilderComponentContentModeDataSourcePatches({
       instances: capabilities.instances,
       editableInstanceIds: getContentModeEditableInstanceIds({
         contentRootIds: capabilities.contentRootIds,

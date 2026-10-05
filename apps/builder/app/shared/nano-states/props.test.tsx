@@ -11,10 +11,10 @@ import {
   blockComponent,
   contentBlockDocumentProp,
   collectionComponent,
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
 } from "@webstudio-is/sdk";
 import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
 import {
@@ -72,7 +72,7 @@ const getIdValuePair = <T extends { id: string }>(item: T) =>
 const toMap = <T extends { id: string }>(list: T[]) =>
   new Map(list.map(getIdValuePair));
 
-test("Custom Slot fields remain local when shared content changes", async () => {
+test("Builder component fields remain local when shared content changes", async () => {
   const componentIdentifier = encodeDataSourceVariable("component-parameter");
   const instances = toMap<Instance>([
     {
@@ -87,13 +87,13 @@ test("Custom Slot fields remain local when shared content changes", async () => 
     {
       id: "card-a",
       type: "instance",
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "fragment" }],
     },
     {
       id: "card-b",
       type: "instance",
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "fragment" }],
     },
     {
@@ -116,13 +116,13 @@ test("Custom Slot fields remain local when shared content changes", async () => 
     {
       id: "component-parameter",
       type: "parameter",
-      name: customSlotComponentVariable,
+      name: builderComponentParameterVariable,
       scopeInstanceId: "fragment",
     },
     {
       id: "schema",
       type: "variable",
-      name: customSlotSchemaVariable,
+      name: builderComponentSchemaVariable,
       scopeInstanceId: "fragment",
       value: {
         type: "json",
@@ -132,7 +132,7 @@ test("Custom Slot fields remain local when shared content changes", async () => 
     ...(["Alpha", "Beta"] as const).map((heading, index) => ({
       id: `values-${index}`,
       type: "variable" as const,
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       scopeInstanceId: index === 0 ? "card-a" : "card-b",
       value: {
         type: "json" as const,
@@ -170,7 +170,7 @@ test("Custom Slot fields remain local when shared content changes", async () => 
   dataSources.set("schema", {
     id: "schema",
     type: "variable",
-    name: customSlotSchemaVariable,
+    name: builderComponentSchemaVariable,
     scopeInstanceId: "fragment",
     value: {
       type: "json",
@@ -211,7 +211,7 @@ const setBoxInstance = (id: Instance["id"]) => {
   );
 };
 
-test("Custom Slot link properties use page links and global variables", async () => {
+test("Builder component link properties use page links and global variables", async () => {
   const componentIdentifier = encodeDataSourceVariable("component-parameter");
   const globalIdentifier = encodeDataSourceVariable("global-link");
   $instances.set(
@@ -228,13 +228,13 @@ test("Custom Slot link properties use page links and global variables", async ()
       {
         id: "card-a",
         type: "instance",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "fragment" }],
       },
       {
         id: "card-b",
         type: "instance",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "fragment" }],
       },
       {
@@ -275,13 +275,13 @@ test("Custom Slot link properties use page links and global variables", async ()
       {
         id: "component-parameter",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "fragment",
       },
       {
         id: "schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "fragment",
         value: {
           type: "json",
@@ -291,7 +291,7 @@ test("Custom Slot link properties use page links and global variables", async ()
       {
         id: "values-a",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "card-a",
         value: {
           type: "json",
@@ -301,7 +301,7 @@ test("Custom Slot link properties use page links and global variables", async ()
       {
         id: "values-b",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "card-b",
         value: {
           type: "json",
@@ -326,7 +326,7 @@ test("Custom Slot link properties use page links and global variables", async ()
   });
 });
 
-test("Custom Slot image properties resolve assets like a regular Image", async () => {
+test("Builder component image properties resolve assets like a regular Image", async () => {
   const componentIdentifier = encodeDataSourceVariable("component-parameter");
   $assets.set(
     new Map([
@@ -357,7 +357,7 @@ test("Custom Slot image properties resolve assets like a regular Image", async (
       {
         id: "card",
         type: "instance",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "fragment" }],
       },
       {
@@ -385,13 +385,13 @@ test("Custom Slot image properties resolve assets like a regular Image", async (
       {
         id: "component-parameter",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "fragment",
       },
       {
         id: "schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "fragment",
         value: {
           type: "json",
@@ -401,7 +401,7 @@ test("Custom Slot image properties resolve assets like a regular Image", async (
       {
         id: "values",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "card",
         value: {
           type: "json",
@@ -421,7 +421,7 @@ test("Custom Slot image properties resolve assets like a regular Image", async (
   });
 });
 
-test("a nested Custom Slot shows each parent copy's own values", async () => {
+test("a nested Builder component shows each parent copy's own values", async () => {
   const cardComponent = encodeDataSourceVariable("card-component");
   const buttonComponent = encodeDataSourceVariable("button-component");
   $instances.set(
@@ -439,7 +439,7 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
         (id): Instance => ({
           id,
           type: "instance",
-          component: customSlotComponent,
+          component: builderComponent,
           children: [{ type: "id", value: "card-fragment" }],
         })
       ),
@@ -452,7 +452,7 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
       {
         id: "nested-button",
         type: "instance",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "button-fragment" }],
       },
       {
@@ -474,13 +474,13 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
       {
         id: "card-component",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "card-fragment",
       },
       {
         id: "card-schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "card-fragment",
         value: {
           type: "json",
@@ -491,7 +491,7 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
         (label, index): DataSource => ({
           id: `card-values-${index}`,
           type: "variable",
-          name: customSlotValuesVariable,
+          name: builderComponentValuesVariable,
           scopeInstanceId: index === 0 ? "card-a" : "card-b",
           value: {
             type: "json",
@@ -502,13 +502,13 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
       {
         id: "button-component",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "button-fragment",
       },
       {
         id: "button-schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "button-fragment",
         value: { type: "json", value: [{ id: "label-id", name: "label" }] },
       },
@@ -516,7 +516,7 @@ test("a nested Custom Slot shows each parent copy's own values", async () => {
       {
         id: "button-values",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "nested-button",
         value: {
           type: "json",
@@ -568,7 +568,7 @@ test("a parent copy's override changes only its own nested copy", async () => {
         (id): Instance => ({
           id,
           type: "instance",
-          component: customSlotComponent,
+          component: builderComponent,
           children: [{ type: "id", value: "card-fragment" }],
         })
       ),
@@ -581,7 +581,7 @@ test("a parent copy's override changes only its own nested copy", async () => {
       {
         id: "nested-button",
         type: "instance",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "button-fragment" }],
       },
       {
@@ -603,33 +603,33 @@ test("a parent copy's override changes only its own nested copy", async () => {
       {
         id: "card-component",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "card-fragment",
       },
       {
         id: "card-schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "card-fragment",
         value: { type: "json", value: [] },
       },
       {
         id: "button-component",
         type: "parameter",
-        name: customSlotComponentVariable,
+        name: builderComponentParameterVariable,
         scopeInstanceId: "button-fragment",
       },
       {
         id: "button-schema",
         type: "variable",
-        name: customSlotSchemaVariable,
+        name: builderComponentSchemaVariable,
         scopeInstanceId: "button-fragment",
         value: { type: "json", value: [{ id: "label-id", name: "label" }] },
       },
       {
         id: "button-values",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "nested-button",
         value: {
           type: "json",
@@ -639,7 +639,7 @@ test("a parent copy's override changes only its own nested copy", async () => {
       {
         id: "card-a-overrides",
         type: "variable",
-        name: "__customSlotOverrides",
+        name: "__builderComponentOverrides",
         scopeInstanceId: "card-a",
         value: {
           type: "json",
@@ -673,9 +673,9 @@ test("a parent copy's override changes only its own nested copy", async () => {
   });
 });
 
-test("editing ordinary variables does not touch Custom Slot rendering", () => {
-  const { $customSlotDataSources } = propsTesting;
-  const unsubscribe = $customSlotDataSources.listen(() => {});
+test("editing ordinary variables does not touch Builder component rendering", () => {
+  const { $builderComponentDataSources } = propsTesting;
+  const unsubscribe = $builderComponentDataSources.listen(() => {});
   $dataSources.set(
     toMap<DataSource>([
       {
@@ -687,7 +687,7 @@ test("editing ordinary variables does not touch Custom Slot rendering", () => {
       },
     ])
   );
-  const before = $customSlotDataSources.get();
+  const before = $builderComponentDataSources.get();
   expect(before.size).toBe(0);
   $dataSources.set(
     toMap<DataSource>([
@@ -700,21 +700,21 @@ test("editing ordinary variables does not touch Custom Slot rendering", () => {
       },
     ])
   );
-  expect($customSlotDataSources.get()).toBe(before);
-  // Custom Slot data still updates
+  expect($builderComponentDataSources.get()).toBe(before);
+  // Builder component data still updates
   $dataSources.set(
     toMap<DataSource>([
       {
         id: "values",
         type: "variable",
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         scopeInstanceId: "card",
         value: { type: "json", value: {} },
       },
     ])
   );
-  expect($customSlotDataSources.get()).not.toBe(before);
-  expect($customSlotDataSources.get().has("values")).toBe(true);
+  expect($builderComponentDataSources.get()).not.toBe(before);
+  expect($builderComponentDataSources.get().has("values")).toBe(true);
   unsubscribe();
 });
 

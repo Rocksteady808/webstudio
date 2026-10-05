@@ -150,7 +150,7 @@ export const createComponentFromSelection = () => {
   try {
     const [selectedItem] = instancePath;
     const result = executeRuntimeMutation({
-      id: "customSlots.createComponent",
+      id: "builderComponents.createComponent",
       input: { instanceSelector: selectedItem.instanceSelector },
     });
     if (result !== undefined) {

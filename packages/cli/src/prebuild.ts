@@ -61,7 +61,7 @@ import {
   type Pages,
   type ComponentBuildContribution,
   isPublishedDeployment,
-  resolveCustomSlotPageValues,
+  resolveBuilderComponentPageValues,
 } from "@webstudio-is/sdk";
 import { migratePages } from "@webstudio-is/project-migrations/pages";
 import {
@@ -1693,8 +1693,8 @@ export const prebuild = async (options: {
     const pageFontAssets = fontAssetsByPage[page.id];
     const pageBackgroundImageAssets = backgroundImageAssetsByPage[page.id];
 
-    // Custom Slot page links become paths, like regular page link props
-    const dataSources = resolveCustomSlotPageValues({
+    // Builder component page links become paths, like regular page link props
+    const dataSources = resolveBuilderComponentPageValues({
       dataSources: new Map(pageData.build.dataSources),
       pages,
       props: siteData.build.props.map(([_id, prop]) => prop),

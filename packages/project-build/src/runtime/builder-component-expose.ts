@@ -4,12 +4,12 @@ import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
 import {
   ROOT_INSTANCE_ID,
   SYSTEM_VARIABLE_ID,
-  customSlotValuesVariable,
+  builderComponentValuesVariable,
   decodeDataVariableId,
-  findCustomSlotDataSource,
-  parseCustomSlotFieldValues,
-  type CustomSlotField,
-  type CustomSlotFieldValue,
+  findBuilderComponentDataSource,
+  parseBuilderComponentFieldValues,
+  type BuilderComponentField,
+  type BuilderComponentFieldValue,
   type DataSources,
   type Prop,
   type WebstudioData,
@@ -21,14 +21,14 @@ import { throwBuilderRuntimeError } from "./errors";
 import { getEditableTextTarget } from "./instances";
 import { createRuntimeMutation } from "./mutation";
 import {
-  customSlotFieldNamespaces,
-  getCustomSlotFieldReference,
-  getCustomSlotSchemaDataSource,
-  listCustomSlotOccurrenceIds,
-  readCustomSlotFields,
-  requireUniqueCustomSlotFieldName,
-  writeCustomSlotFields,
-} from "./custom-slot-fields";
+  builderComponentFieldNamespaces,
+  getBuilderComponentFieldReference,
+  getBuilderComponentSchemaDataSource,
+  listBuilderComponentOccurrenceIds,
+  readBuilderComponentFields,
+  requireUniqueBuilderComponentFieldName,
+  writeBuilderComponentFields,
+} from "./builder-component-fields";
 
 /**
  * Exposes settings of an element inside a component as component
@@ -38,6 +38,7 @@ import {
 
 const exposableTypes = [
   "text",
+  "richText",
   "number",
   "boolean",
   "link",
@@ -45,7 +46,7 @@ const exposableTypes = [
   "json",
 ] as const;
 
-export const exposeCustomSlotPropertiesInput = z.object({
+export const exposeBuilderComponentPropertiesInput = z.object({
   fragmentId: z.string().min(1),
   instanceId: z.string().min(1).describe("Element inside the component"),
   properties: z
@@ -69,7 +70,7 @@ export const exposeCustomSlotPropertiesInput = z.object({
 
 const getLiteralField = (
   prop: Prop
-): undefined | Pick<CustomSlotField, "type" | "defaultValue"> => {
+): undefined | Pick<BuilderComponentField, "type" | "defaultValue"> => {
   switch (prop.type) {
     case "string":
       return {
@@ -121,14 +122,14 @@ const isMovableToCopies = (expression: string, dataSources: DataSources) => {
   return true;
 };
 
-export const exposeCustomSlotProperties = (
+export const exposeBuilderComponentProperties = (
   state: Partial<
-    Pick<BuilderState, (typeof customSlotFieldNamespaces)[number]>
+    Pick<BuilderState, (typeof builderComponentFieldNamespaces)[number]>
   >,
-  input: z.infer<typeof exposeCustomSlotPropertiesInput>,
+  input: z.infer<typeof exposeBuilderComponentPropertiesInput>,
   context: BuilderRuntimeContext
 ) => {
-  for (const namespace of customSlotFieldNamespaces) {
+  for (const namespace of builderComponentFieldNamespaces) {
     if (state[namespace] === undefined) {
       return throwBuilderRuntimeError(
         "BAD_REQUEST",
@@ -138,11 +139,11 @@ export const exposeCustomSlotProperties = (
   }
   const before = state as Pick<
     WebstudioData,
-    (typeof customSlotFieldNamespaces)[number]
+    (typeof builderComponentFieldNamespaces)[number]
   >;
   const fieldIds: string[] = [];
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getCustomSlotSchemaDataSource(
+    const { schema, component } = getBuilderComponentSchemaDataSource(
       draft,
       input.fragmentId
     );
@@ -150,22 +151,25 @@ export const exposeCustomSlotProperties = (
     if (instance === undefined) {
       return throwBuilderRuntimeError("NOT_FOUND", "Element not found");
     }
-    const fields = readCustomSlotFields(schema);
+    const fields = readBuilderComponentFields(schema);
     // data a setting was bound to, filled in on every copy
-    const copyValues = new Map<string, CustomSlotFieldValue>();
+    const copyValues = new Map<string, BuilderComponentFieldValue>();
     for (const item of input.properties) {
-      requireUniqueCustomSlotFieldName(
+      requireUniqueBuilderComponentFieldName(
         draft,
         input.fragmentId,
         fields,
         item.name
       );
-      const field: CustomSlotField = {
+      const field: BuilderComponentField = {
         id: context.createId(),
         name: item.name,
         type: item.type ?? "text",
       };
-      const reference = getCustomSlotFieldReference(component.id, item.name);
+      const reference = getBuilderComponentFieldReference(
+        component.id,
+        item.name
+      );
       const takeExpression = (expression: string, label: string) => {
         if (isMovableToCopies(expression, draft.dataSources) === false) {
           return throwBuilderRuntimeError(
@@ -213,6 +217,10 @@ export const exposeCustomSlotProperties = (
             );
           }
           Object.assign(field, literal);
+          // Markdown content is a rich text property, not plain text
+          if (item.type === "richText" && literal.type === "text") {
+            field.type = "richText";
+          }
         } else if (item.propName === showAttribute) {
           // elements without Show set are visible
           field.type = "boolean";
@@ -231,18 +239,21 @@ export const exposeCustomSlotProperties = (
       fields.push(field);
       fieldIds.push(field.id);
     }
-    writeCustomSlotFields(draft, schema, fields);
+    writeBuilderComponentFields(draft, schema, fields);
 
-    for (const slotId of listCustomSlotOccurrenceIds(draft, input.fragmentId)) {
+    for (const slotId of listBuilderComponentOccurrenceIds(
+      draft,
+      input.fragmentId
+    )) {
       if (copyValues.size === 0) {
         break;
       }
-      const existing = findCustomSlotDataSource(
+      const existing = findBuilderComponentDataSource(
         draft.dataSources,
         slotId,
-        customSlotValuesVariable
+        builderComponentValuesVariable
       );
-      const values = parseCustomSlotFieldValues(
+      const values = parseBuilderComponentFieldValues(
         existing?.type === "variable" && existing.value.type === "json"
           ? existing.value.value
           : undefined
@@ -255,7 +266,7 @@ export const exposeCustomSlotProperties = (
         type: "variable",
         id,
         scopeInstanceId: slotId,
-        name: customSlotValuesVariable,
+        name: builderComponentValuesVariable,
         value: { type: "json", value: values },
       });
     }
@@ -263,6 +274,6 @@ export const exposeCustomSlotProperties = (
   return createRuntimeMutation({
     payload,
     result: { fieldIds },
-    invalidatesNamespaces: customSlotFieldNamespaces,
+    invalidatesNamespaces: builderComponentFieldNamespaces,
   });
 };

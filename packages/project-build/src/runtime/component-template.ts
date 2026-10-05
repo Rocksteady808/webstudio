@@ -1,6 +1,6 @@
 import {
-  createCustomSlotFragment,
-  customSlotComponent,
+  createBuilderComponentFragment,
+  builderComponent,
   type Instance,
   type WebstudioFragment,
 } from "@webstudio-is/sdk";
@@ -39,8 +39,8 @@ export const createComponentTemplateFragment = ({
   createId: () => string;
 }): WebstudioFragment => {
   // a static template would reuse one Fragment id across every insertion
-  if (component === customSlotComponent) {
-    return createCustomSlotFragment({ createId });
+  if (component === builderComponent) {
+    return createBuilderComponentFragment({ createId });
   }
   const template = templates.get(component)?.template;
   if (template !== undefined) {

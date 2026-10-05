@@ -4,44 +4,46 @@ import type { Prop } from "./schema/props";
 import { findPageByIdOrPath, getPagePath } from "./page-utils";
 import type { Instance, Instances } from "./schema/instances";
 import {
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
-} from "./custom-slot";
+  builderComponentParameterVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
+  findBuilderComponentDataSource,
+  getBuilderComponentContentRootId,
+} from "./builder-component";
 
 /**
  * Field identities belong to the shared definition while field values belong to
  * each occurrence. This follows the model introduced in Webstudio PR #5677.
  */
-export type CustomSlotPageLink =
+export type BuilderComponentPageLink =
   | string
   | { pageId: string; instanceId: string };
 
-export type CustomSlotFieldValue =
+export type BuilderComponentFieldValue =
   | { type: "literal"; value: unknown }
   | { type: "expression"; value: string }
-  | { type: "page"; value: CustomSlotPageLink }
+  | { type: "page"; value: BuilderComponentPageLink }
   | { type: "asset"; value: string };
 
 /**
  * Text, number, link, HTML, boolean, image, JSON and choice values live in
- * the component value. A variant picks which variant styles apply to a copy.
+ * the component value. Choice values also work as style conditions, which is
+ * how variants are made: a variant is a choice value styled differently.
  */
-export type CustomSlotFieldType =
+export type BuilderComponentFieldType =
   | "text"
+  | "richText"
   | "number"
   | "link"
   | "html"
   | "boolean"
   | "image"
   | "json"
-  | "choice"
-  | "variant";
+  | "choice";
 
 const valueFieldTypes = new Set<string>([
   "text",
+  "richText",
   "number",
   "link",
   "html",
@@ -51,31 +53,27 @@ const valueFieldTypes = new Set<string>([
   "choice",
 ]);
 
-/** One choice of a variant property, e.g. Small in Size: Small / Large. */
-export type CustomSlotVariantOption = { id: string; name: string };
-
-export type CustomSlotField = {
+export type BuilderComponentField = {
   id: string;
   name: string;
-  type?: CustomSlotFieldType;
-  /** choices of a variant property; a copy stores the chosen option id */
-  options?: CustomSlotVariantOption[];
-  /** display name of the design a copy has without a variant, e.g. Primary */
-  baseName?: string;
+  type?: BuilderComponentFieldType;
   /** values of a choice property; each value is also its label */
   choices?: string[];
   /** a property without a default is required */
-  defaultValue?: CustomSlotFieldValue;
+  defaultValue?: BuilderComponentFieldValue;
 };
 
-export type CustomSlotFieldValues = Record<string, CustomSlotFieldValue>;
+export type BuilderComponentFieldValues = Record<
+  string,
+  BuilderComponentFieldValue
+>;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && Array.isArray(value) === false;
 
-export const parseCustomSlotFieldValue = (
+export const parseBuilderComponentFieldValue = (
   value: unknown
-): CustomSlotFieldValue | undefined => {
+): BuilderComponentFieldValue | undefined => {
   if (isRecord(value) === false) {
     return;
   }
@@ -108,30 +106,6 @@ export const parseCustomSlotFieldValue = (
   }
 };
 
-// option ids end up in CSS selectors and HTML attributes
-const variantOptionIdPattern = /^[A-Za-z0-9_-]+$/;
-
-const parseVariantOptions = (value: unknown): CustomSlotVariantOption[] => {
-  if (Array.isArray(value) === false) {
-    return [];
-  }
-  const options: CustomSlotVariantOption[] = [];
-  const ids = new Set<string>();
-  for (const item of value) {
-    if (
-      isRecord(item) &&
-      typeof item.id === "string" &&
-      typeof item.name === "string" &&
-      variantOptionIdPattern.test(item.id) &&
-      ids.has(item.id) === false
-    ) {
-      options.push({ id: item.id, name: item.name });
-      ids.add(item.id);
-    }
-  }
-  return options;
-};
-
 const parseChoices = (value: unknown) =>
   Array.isArray(value)
     ? Array.from(
@@ -143,11 +117,13 @@ const parseChoices = (value: unknown) =>
       )
     : [];
 
-export const parseCustomSlotFields = (value: unknown): CustomSlotField[] => {
+export const parseBuilderComponentFields = (
+  value: unknown
+): BuilderComponentField[] => {
   if (Array.isArray(value) === false) {
     return [];
   }
-  const fields: CustomSlotField[] = [];
+  const fields: BuilderComponentField[] = [];
   const ids = new Set<string>();
   const names = new Set<string>();
   for (const item of value) {
@@ -162,21 +138,14 @@ export const parseCustomSlotFields = (value: unknown): CustomSlotField[] => {
     ) {
       continue;
     }
-    const field: CustomSlotField = { id: item.id, name: item.name };
+    const field: BuilderComponentField = { id: item.id, name: item.name };
     if (typeof item.type === "string" && valueFieldTypes.has(item.type)) {
-      field.type = item.type as CustomSlotFieldType;
+      field.type = item.type as BuilderComponentFieldType;
     }
     if (item.type === "choice") {
       field.choices = parseChoices(item.choices);
     }
-    if (item.type === "variant") {
-      field.type = "variant";
-      field.options = parseVariantOptions(item.options);
-      if (typeof item.baseName === "string" && item.baseName.length > 0) {
-        field.baseName = item.baseName;
-      }
-    }
-    const defaultValue = parseCustomSlotFieldValue(item.defaultValue);
+    const defaultValue = parseBuilderComponentFieldValue(item.defaultValue);
     if (defaultValue !== undefined) {
       field.defaultValue = defaultValue;
     }
@@ -187,41 +156,37 @@ export const parseCustomSlotFields = (value: unknown): CustomSlotField[] => {
   return fields;
 };
 
-export const parseCustomSlotFieldValues = (
+export const parseBuilderComponentFieldValues = (
   value: unknown
-): CustomSlotFieldValues => {
+): BuilderComponentFieldValues => {
   if (isRecord(value) === false) {
     return {};
   }
   return Object.fromEntries(
     Object.entries(value).flatMap(([id, rawValue]) => {
-      const fieldValue = parseCustomSlotFieldValue(rawValue);
+      const fieldValue = parseBuilderComponentFieldValue(rawValue);
       return fieldValue === undefined ? [] : [[id, fieldValue]];
     })
   );
 };
 
 /** Resolve a single occurrence without mutating its persisted values. */
-export const resolveCustomSlotFields = async ({
+export const resolveBuilderComponentFields = async ({
   fields,
   values,
   evaluateExpression,
   resolvePage = () => undefined,
   resolveAsset = () => undefined,
 }: {
-  fields: readonly CustomSlotField[];
-  values: CustomSlotFieldValues;
+  fields: readonly BuilderComponentField[];
+  values: BuilderComponentFieldValues;
   evaluateExpression: (expression: string) => unknown | Promise<unknown>;
-  resolvePage?: (value: CustomSlotPageLink) => unknown;
+  resolvePage?: (value: BuilderComponentPageLink) => unknown;
   /** URL of an image asset, the same one a regular Image uses */
   resolveAsset?: (assetId: string) => unknown;
 }): Promise<Record<string, unknown>> => {
   const entries: Array<[string, unknown]> = [];
   for (const field of fields) {
-    // variants are applied through CSS, not the component value
-    if (field.type === "variant") {
-      continue;
-    }
     const value = values[field.id] ?? field.defaultValue;
     let resolved: unknown;
     if (value?.type === "expression") {
@@ -238,7 +203,7 @@ export const resolveCustomSlotFields = async ({
   return Object.fromEntries(entries);
 };
 
-export type CustomSlotFieldIssue = {
+export type BuilderComponentFieldIssue = {
   type: "missing" | "type" | "choice";
   message: string;
 };
@@ -247,8 +212,8 @@ const isJsonContainer = (value: unknown) =>
   typeof value === "object" && value !== null;
 
 const matchesFieldType = (
-  type: CustomSlotFieldType,
-  value: CustomSlotFieldValue
+  type: BuilderComponentFieldType,
+  value: BuilderComponentFieldValue
 ) => {
   if (value.type === "page") {
     return type === "link";
@@ -271,8 +236,9 @@ const matchesFieldType = (
   }
 };
 
-const fieldTypeLabels: Record<CustomSlotFieldType, string> = {
+const fieldTypeLabels: Record<BuilderComponentFieldType, string> = {
   text: "text",
+  richText: "text",
   number: "a number",
   link: "a link",
   html: "HTML",
@@ -280,7 +246,6 @@ const fieldTypeLabels: Record<CustomSlotFieldType, string> = {
   image: "an image",
   json: "an object or array",
   choice: "one of the choices",
-  variant: "a variant",
 };
 
 /**
@@ -288,13 +253,10 @@ const fieldTypeLabels: Record<CustomSlotFieldType, string> = {
  * when a property changes; they stay and show this error until fixed.
  * Expressions are checked when they run, not here.
  */
-export const getCustomSlotFieldIssue = (
-  field: CustomSlotField,
-  localValue: undefined | CustomSlotFieldValue
-): undefined | CustomSlotFieldIssue => {
-  if (field.type === "variant") {
-    return;
-  }
+export const getBuilderComponentFieldIssue = (
+  field: BuilderComponentField,
+  localValue: undefined | BuilderComponentFieldValue
+): undefined | BuilderComponentFieldIssue => {
   const value = localValue ?? field.defaultValue;
   if (
     value === undefined ||
@@ -323,12 +285,12 @@ export const getCustomSlotFieldIssue = (
 };
 
 /** Builds the same href a regular Link builds for a page or page section. */
-export const getCustomSlotPageHref = ({
+export const getBuilderComponentPageHref = ({
   value,
   pages,
   props,
 }: {
-  value: CustomSlotPageLink;
+  value: BuilderComponentPageLink;
   pages: Pages;
   props: Iterable<Prop>;
 }): string | undefined => {
@@ -355,10 +317,10 @@ export const getCustomSlotPageHref = ({
 };
 
 const resolvePageValue = (
-  value: CustomSlotFieldValue | undefined,
-  resolve: (value: CustomSlotPageLink) => string | undefined,
+  value: BuilderComponentFieldValue | undefined,
+  resolve: (value: BuilderComponentPageLink) => string | undefined,
   resolveAsset: (assetId: string) => string | undefined
-): CustomSlotFieldValue | undefined => {
+): BuilderComponentFieldValue | undefined => {
   if (value?.type === "page") {
     return { type: "literal", value: resolve(value.value) };
   }
@@ -372,7 +334,7 @@ const resolvePageValue = (
  * Replaces page links with their paths so generated code never needs pages.
  * Returns a copy and leaves the given data sources untouched.
  */
-export const resolveCustomSlotPageValues = ({
+export const resolveBuilderComponentPageValues = ({
   dataSources,
   pages,
   props,
@@ -384,38 +346,44 @@ export const resolveCustomSlotPageValues = ({
   resolveAsset?: (assetId: string) => string | undefined;
 }): DataSources => {
   const propsList = Array.from(props);
-  const resolve = (value: CustomSlotPageLink) =>
-    getCustomSlotPageHref({ value, pages, props: propsList });
-  const resolveValues = (values: CustomSlotFieldValues) =>
+  const resolve = (value: BuilderComponentPageLink) =>
+    getBuilderComponentPageHref({ value, pages, props: propsList });
+  const resolveValues = (values: BuilderComponentFieldValues) =>
     Object.fromEntries(
       Object.entries(values).map(([id, fieldValue]) => [
         id,
         resolvePageValue(fieldValue, resolve, resolveAsset),
       ])
     );
-  // copy the map only once a Custom Slot value needs resolving
+  // copy the map only once a Builder component value needs resolving
   let resolved: undefined | DataSources;
   for (const dataSource of dataSources.values()) {
     if (dataSource.type !== "variable" || dataSource.value.type !== "json") {
       continue;
     }
     let value: object;
-    if (dataSource.name === customSlotSchemaVariable) {
-      value = parseCustomSlotFields(dataSource.value.value).map((field) => {
-        const defaultValue = resolvePageValue(
-          field.defaultValue,
-          resolve,
-          resolveAsset
-        );
-        return defaultValue === undefined ? field : { ...field, defaultValue };
-      });
-    } else if (dataSource.name === customSlotValuesVariable) {
-      value = resolveValues(parseCustomSlotFieldValues(dataSource.value.value));
-    } else if (dataSource.name === customSlotOverridesVariable) {
+    if (dataSource.name === builderComponentSchemaVariable) {
+      value = parseBuilderComponentFields(dataSource.value.value).map(
+        (field) => {
+          const defaultValue = resolvePageValue(
+            field.defaultValue,
+            resolve,
+            resolveAsset
+          );
+          return defaultValue === undefined
+            ? field
+            : { ...field, defaultValue };
+        }
+      );
+    } else if (dataSource.name === builderComponentValuesVariable) {
+      value = resolveValues(
+        parseBuilderComponentFieldValues(dataSource.value.value)
+      );
+    } else if (dataSource.name === builderComponentOverridesVariable) {
       value = Object.fromEntries(
-        Object.entries(parseCustomSlotOverrides(dataSource.value.value)).map(
-          ([key, values]) => [key, resolveValues(values)]
-        )
+        Object.entries(
+          parseBuilderComponentOverrides(dataSource.value.value)
+        ).map(([key, values]) => [key, resolveValues(values)])
       );
     } else {
       continue;
@@ -430,49 +398,76 @@ export const resolveCustomSlotPageValues = ({
   return resolved ?? dataSources;
 };
 
-/** Attribute a copy carries so its variant styles apply. */
-export const customSlotVariantAttribute = "data-ws-variant";
+/**
+ * Attribute a copy carries with its choice values, so styles conditioned on
+ * a value apply inside copies using it, e.g. `size: large`.
+ */
+export const builderComponentChoiceAttribute = "data-ws-props";
+
+/** One value of a choice property inside the copy attribute. */
+export const getBuilderComponentChoiceToken = (
+  fieldId: string,
+  value: string
+) => `${fieldId}=${encodeURIComponent(value)}`;
 
 /**
- * Style state for an element inside the component that only applies when its
- * copy uses the option, e.g. `.button:is([data-ws-variant~="small"] *)`.
+ * Style condition for an element inside the component that only applies when
+ * its copy uses the value, e.g. `.button:is([data-ws-props~="id=large"] *)`.
  */
-export const getCustomSlotVariantState = (optionId: string) =>
-  `:is([${customSlotVariantAttribute}~="${optionId}"] *)`;
+export const getBuilderComponentChoiceState = (
+  fieldId: string,
+  value: string
+) =>
+  `:is([${builderComponentChoiceAttribute}~="${getBuilderComponentChoiceToken(fieldId, value)}"] *)`;
 
-const variantStatePattern = new RegExp(
-  `^(:is\\(\\[${customSlotVariantAttribute}~="([A-Za-z0-9_-]+)"\\] \\*\\))(.*)$`
+const choiceStatePattern = new RegExp(
+  `^(:is\\(\\[${builderComponentChoiceAttribute}~="(([A-Za-z0-9_-]+)=([^"\\s]*))"\\] \\*\\))(.*)$`
 );
 
 /**
- * Splits a variant state combined with another state, like a variant's
- * hover `:is([data-ws-variant~="small"] *):hover`, into its parts.
+ * Splits a choice condition combined with another state, like the hover of
+ * `size: large` `:is([data-ws-props~="id=large"] *):hover`, into its parts.
  */
-export const splitCustomSlotVariantState = (state: undefined | string) => {
-  const match = state?.match(variantStatePattern);
+export const splitBuilderComponentChoiceState = (state: undefined | string) => {
+  const match = state?.match(choiceStatePattern);
   if (match === null || match === undefined) {
     return;
   }
-  return { variantState: match[1], optionId: match[2], state: match[3] };
+  let value = match[4];
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    // keep the raw value of a hand written selector
+  }
+  return {
+    choiceState: match[1],
+    token: match[2],
+    fieldId: match[3],
+    value,
+    state: match[5],
+  };
 };
 
-/** Option ids a copy uses, joined for the variant attribute. */
-export const getCustomSlotVariantAttribute = (
-  fields: readonly CustomSlotField[],
-  values: CustomSlotFieldValues
+/** Choice values a copy uses, joined for the choice attribute. */
+export const getBuilderComponentChoiceAttribute = (
+  fields: readonly BuilderComponentField[],
+  values: BuilderComponentFieldValues
 ) => {
-  const optionIds: string[] = [];
+  const tokens: string[] = [];
   for (const field of fields) {
-    if (field.type !== "variant") {
+    if (field.type !== "choice") {
       continue;
     }
     const value = values[field.id] ?? field.defaultValue;
-    const optionId = value?.type === "literal" ? value.value : undefined;
-    if (field.options?.some((option) => option.id === optionId)) {
-      optionIds.push(optionId as string);
+    if (
+      value?.type === "literal" &&
+      typeof value.value === "string" &&
+      field.choices?.includes(value.value)
+    ) {
+      tokens.push(getBuilderComponentChoiceToken(field.id, value.value));
     }
   }
-  return optionIds.join(" ");
+  return tokens.join(" ");
 };
 
 /**
@@ -480,20 +475,23 @@ export const getCustomSlotVariantAttribute = (
  * a parent copy belongs to that parent copy only. The outermost copy stores
  * them by the path of nested copies, e.g. { "button": { label: ... } }.
  */
-export const customSlotOverridesVariable = "__customSlotOverrides";
+export const builderComponentOverridesVariable = "__builderComponentOverrides";
 
-export type CustomSlotOverrides = Record<string, CustomSlotFieldValues>;
+export type BuilderComponentOverrides = Record<
+  string,
+  BuilderComponentFieldValues
+>;
 
-export const parseCustomSlotOverrides = (
+export const parseBuilderComponentOverrides = (
   value: unknown
-): CustomSlotOverrides => {
+): BuilderComponentOverrides => {
   if (isRecord(value) === false) {
     return {};
   }
-  const overrides: CustomSlotOverrides = {};
+  const overrides: BuilderComponentOverrides = {};
   for (const [key, values] of Object.entries(value)) {
     if (isRecord(values)) {
-      overrides[key] = parseCustomSlotFieldValues(values);
+      overrides[key] = parseBuilderComponentFieldValues(values);
     }
   }
   return overrides;
@@ -503,7 +501,7 @@ export const parseCustomSlotOverrides = (
  * Copies whose shared content the copy at the start of the selector is shown
  * in, innermost first. Empty for a copy placed directly on a page.
  */
-export const getCustomSlotEnclosingCopies = (
+export const getBuilderComponentEnclosingCopies = (
   instances: Instances,
   instanceSelector: readonly Instance["id"][]
 ) => {
@@ -511,7 +509,7 @@ export const getCustomSlotEnclosingCopies = (
   for (let index = 2; index < instanceSelector.length; index += 1) {
     const copyId = instanceSelector[index];
     if (
-      getCustomSlotContentRootId(instances, copyId) ===
+      getBuilderComponentContentRootId(instances, copyId) ===
       instanceSelector[index - 1]
     ) {
       copyIds.push(copyId);
@@ -527,7 +525,7 @@ const getOverrideKey = (
 ) => [...enclosingCopyIds.slice(0, ownerIndex).reverse(), slotId].join("/");
 
 /** Where edits to a nested copy are stored: on the outermost parent copy. */
-export const getCustomSlotOverrideTarget = (
+export const getBuilderComponentOverrideTarget = (
   enclosingCopyIds: readonly Instance["id"][],
   slotId: Instance["id"]
 ) => {
@@ -542,17 +540,17 @@ export const getCustomSlotOverrideTarget = (
 };
 
 /** A nested copy's values with its parent copies' overrides applied. */
-export const applyCustomSlotOverrides = ({
+export const applyBuilderComponentOverrides = ({
   values,
   slotId,
   enclosingCopyIds,
   getOverrides,
 }: {
-  values: CustomSlotFieldValues;
+  values: BuilderComponentFieldValues;
   slotId: Instance["id"];
   enclosingCopyIds: readonly Instance["id"][];
-  getOverrides: (copyId: Instance["id"]) => CustomSlotOverrides;
-}): CustomSlotFieldValues => {
+  getOverrides: (copyId: Instance["id"]) => BuilderComponentOverrides;
+}): BuilderComponentFieldValues => {
   let result = values;
   // apply from the innermost parent so the outermost copy wins
   for (let index = 0; index < enclosingCopyIds.length; index += 1) {
@@ -567,17 +565,17 @@ export const applyCustomSlotOverrides = ({
 };
 
 /** Reads a copy's overrides from its data sources. */
-export const getCustomSlotCopyOverrides = (
+export const getBuilderComponentCopyOverrides = (
   dataSources: DataSources,
   copyId: Instance["id"]
-): CustomSlotOverrides => {
-  const dataSource = findCustomSlotDataSource(
+): BuilderComponentOverrides => {
+  const dataSource = findBuilderComponentDataSource(
     dataSources,
     copyId,
-    customSlotOverridesVariable
+    builderComponentOverridesVariable
   );
   return dataSource?.type === "variable" && dataSource.value.type === "json"
-    ? parseCustomSlotOverrides(dataSource.value.value)
+    ? parseBuilderComponentOverrides(dataSource.value.value)
     : {};
 };
 
@@ -590,7 +588,7 @@ const readJsonVariable = (dataSource: undefined | DataSource) =>
  * What a copy renders: its shared Fragment and properties, and its own
  * values with the overrides its parent copies set for it.
  */
-export const getCustomSlotCopy = ({
+export const getBuilderComponentCopy = ({
   instances,
   dataSources,
   slotId,
@@ -602,15 +600,15 @@ export const getCustomSlotCopy = ({
   /** parent copies this copy is shown inside, innermost first */
   enclosingCopyIds?: readonly Instance["id"][];
 }) => {
-  const fragmentId = getCustomSlotContentRootId(instances, slotId);
+  const fragmentId = getBuilderComponentContentRootId(instances, slotId);
   const fragment = instances.get(fragmentId ?? "");
   const component =
     fragmentId === undefined
       ? undefined
-      : findCustomSlotDataSource(
+      : findBuilderComponentDataSource(
           dataSources,
           fragmentId,
-          customSlotComponentVariable
+          builderComponentParameterVariable
         );
   if (fragment === undefined || component?.type !== "parameter") {
     return;
@@ -618,28 +616,29 @@ export const getCustomSlotCopy = ({
   return {
     fragment,
     component,
-    fields: parseCustomSlotFields(
+    fields: parseBuilderComponentFields(
       readJsonVariable(
-        findCustomSlotDataSource(
+        findBuilderComponentDataSource(
           dataSources,
           fragment.id,
-          customSlotSchemaVariable
+          builderComponentSchemaVariable
         )
       )
     ),
-    values: applyCustomSlotOverrides({
-      values: parseCustomSlotFieldValues(
+    values: applyBuilderComponentOverrides({
+      values: parseBuilderComponentFieldValues(
         readJsonVariable(
-          findCustomSlotDataSource(
+          findBuilderComponentDataSource(
             dataSources,
             slotId,
-            customSlotValuesVariable
+            builderComponentValuesVariable
           )
         )
       ),
       slotId,
       enclosingCopyIds,
-      getOverrides: (copyId) => getCustomSlotCopyOverrides(dataSources, copyId),
+      getOverrides: (copyId) =>
+        getBuilderComponentCopyOverrides(dataSources, copyId),
     }),
   };
 };

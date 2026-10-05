@@ -2,17 +2,17 @@ import { expect, test } from "vitest";
 import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
 import {
   ROOT_INSTANCE_ID,
-  customSlotComponentVariable,
+  builderComponentParameterVariable,
   encodeDataVariableId,
-  findCustomSlotDataSource,
+  findBuilderComponentDataSource,
   type WebstudioData,
 } from "@webstudio-is/sdk";
 import { applyBuilderPatchTransactions } from "../state/patch";
 import type { BuilderState } from "../state/builder-state";
 import type { BuilderRuntimeMutation } from "./mutation";
-import { getCustomSlotProperties } from "./custom-slot-fields";
-import { createComponentFromInstance } from "./custom-slot-create";
-import { exposeCustomSlotProperties } from "./custom-slot-expose";
+import { getBuilderComponentProperties } from "./builder-component-fields";
+import { createComponentFromInstance } from "./builder-component-create";
+import { exposeBuilderComponentProperties } from "./builder-component-expose";
 
 const createIdFactory = () => {
   let index = 0;
@@ -106,10 +106,10 @@ const createCard = () => {
   const state = apply(data as BuilderState, created);
   const { fragmentId } = created.result;
   const [copyId] = created.result.instanceSelector;
-  const component = findCustomSlotDataSource(
+  const component = findBuilderComponentDataSource(
     state.dataSources ?? new Map(),
     fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   );
   return {
     state,
@@ -121,7 +121,7 @@ const createCard = () => {
 };
 
 const readProperties = (state: BuilderState, copyId: string) =>
-  getCustomSlotProperties({
+  getBuilderComponentProperties({
     instances: state.instances ?? new Map(),
     dataSources: state.dataSources ?? new Map(),
     slotId: copyId,
@@ -129,7 +129,7 @@ const readProperties = (state: BuilderState, copyId: string) =>
 
 test("exposes text and settings with their current values as defaults", () => {
   const card = createCard();
-  const mutation = exposeCustomSlotProperties(
+  const mutation = exposeBuilderComponentProperties(
     card.state,
     {
       fragmentId: card.fragmentId,
@@ -194,7 +194,7 @@ test("data a setting was bound to moves to every copy", () => {
   };
   const next = apply(
     state,
-    exposeCustomSlotProperties(
+    exposeBuilderComponentProperties(
       state,
       {
         fragmentId: card.fragmentId,
@@ -232,7 +232,7 @@ test("refuses settings bound to data from inside the component", () => {
     }),
   };
   expect(() =>
-    exposeCustomSlotProperties(
+    exposeBuilderComponentProperties(
       state,
       {
         fragmentId: card.fragmentId,
@@ -242,4 +242,36 @@ test("refuses settings bound to data from inside the component", () => {
       card.context
     )
   ).toThrow("uses data from inside the component");
+});
+
+test("Markdown content becomes a rich text property", () => {
+  const card = createCard();
+  const state: BuilderState = {
+    ...card.state,
+    props: new Map(card.state.props).set("markdown", {
+      id: "markdown",
+      instanceId: "heading",
+      name: "code",
+      type: "string",
+      value: "Some **bold** text",
+    }),
+  };
+  const next = apply(
+    state,
+    exposeBuilderComponentProperties(
+      state,
+      {
+        fragmentId: card.fragmentId,
+        instanceId: "heading",
+        properties: [{ propName: "code", name: "body", type: "richText" }],
+      },
+      card.context
+    )
+  );
+  expect(readProperties(next, card.copyId)?.[0]?.field).toEqual({
+    id: expect.any(String),
+    name: "body",
+    type: "richText",
+    defaultValue: { type: "literal", value: "Some **bold** text" },
+  });
 });

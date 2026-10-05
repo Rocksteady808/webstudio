@@ -38,15 +38,15 @@ import {
 } from "@webstudio-is/design-system";
 import { getExpressionIdentifiers } from "@webstudio-is/expression";
 import {
-  customSlotComponent,
+  builderComponent,
   decodeDataVariableId,
-  getCustomSlotContentRootId,
-  type CustomSlotFieldType,
-  type CustomSlotFieldValue,
+  getBuilderComponentContentRootId,
+  type BuilderComponentFieldType,
+  type BuilderComponentFieldValue,
 } from "@webstudio-is/sdk";
 import {
-  findCustomSlotConnection,
-  toCustomSlotFieldName,
+  findBuilderComponentConnection,
+  toBuilderComponentFieldName,
 } from "@webstudio-is/project-build/runtime";
 import { $dataSources, $instances } from "~/shared/sync/data-stores";
 import { executeRuntimeMutation } from "~/shared/instance-utils/data";
@@ -71,9 +71,9 @@ export const evaluateExpressionWithinScope = async (
 ) => computeExpressionWithinScope(expression, scope);
 
 /** What a property created from this setting should look like. */
-export type CustomSlotFieldHint = {
-  type?: CustomSlotFieldType;
-  defaultValue?: CustomSlotFieldValue;
+export type BuilderComponentFieldHint = {
+  type?: BuilderComponentFieldType;
+  defaultValue?: BuilderComponentFieldValue;
 };
 
 const toLiteralDefault = (value: unknown) =>
@@ -84,10 +84,10 @@ const toLiteralDefault = (value: unknown) =>
     : undefined;
 
 /**
- * Inside a Custom Slot, settings connect to component properties the way
+ * Inside a Builder component, settings connect to component properties the way
  * Webflow's "Connect to property" works, without writing expressions.
  */
-const CustomSlotConnectSection = ({
+const BuilderComponentConnectSection = ({
   aliases,
   value,
   currentValue,
@@ -97,7 +97,7 @@ const CustomSlotConnectSection = ({
   aliases: Map<string, string>;
   value?: string;
   currentValue: unknown;
-  fieldHint?: CustomSlotFieldHint;
+  fieldHint?: BuilderComponentFieldHint;
   onConnect: (expression: string) => void;
 }) => {
   const dataSources = useStore($dataSources);
@@ -106,7 +106,7 @@ const CustomSlotConnectSection = ({
   const instances = useStore($instances);
   const connection = useMemo(
     () =>
-      findCustomSlotConnection({
+      findBuilderComponentConnection({
         dataSources,
         availableDataSourceIds: Array.from(aliases.keys()).flatMap(
           (identifier) => decodeDataVariableId(identifier) ?? []
@@ -114,8 +114,8 @@ const CustomSlotConnectSection = ({
         // a copy's own values cannot connect to the properties they fill in,
         // but a nested copy connects to the component it is inside
         excludeFragmentId:
-          selectedInstance?.component === customSlotComponent
-            ? getCustomSlotContentRootId(instances, selectedInstance.id)
+          selectedInstance?.component === builderComponent
+            ? getBuilderComponentContentRootId(instances, selectedInstance.id)
             : undefined,
       }),
     [aliases, dataSources, instances, selectedInstance]
@@ -123,13 +123,13 @@ const CustomSlotConnectSection = ({
   if (connection === undefined) {
     return;
   }
-  const newName = toCustomSlotFieldName(newLabel);
+  const newName = toBuilderComponentFieldName(newLabel);
   const createProperty = () => {
     if (newName.length === 0) {
       return;
     }
     const mutation = executeRuntimeMutation({
-      id: "customSlots.createField",
+      id: "builderComponents.createField",
       input: {
         fragmentId: connection.fragmentId,
         name: newName,
@@ -157,22 +157,19 @@ const CustomSlotConnectSection = ({
         </Tooltip>
       </PanelContent>
       <CssValueListArrowFocus>
-        {connection.fields
-          // variants pick styles, they have no value to connect
-          .filter((field) => field.type !== "variant")
-          .map((field, index) => {
-            const expression = connection.getExpression(field.name);
-            return (
-              <CssValueListItem
-                key={field.id}
-                id={field.id}
-                index={index}
-                label={<Label truncate>{humanizeString(field.name)}</Label>}
-                active={value?.trim() === expression}
-                onClick={() => onConnect(expression)}
-              />
-            );
-          })}
+        {connection.fields.map((field, index) => {
+          const expression = connection.getExpression(field.name);
+          return (
+            <CssValueListItem
+              key={field.id}
+              id={field.id}
+              index={index}
+              label={<Label truncate>{humanizeString(field.name)}</Label>}
+              active={value?.trim() === expression}
+              onClick={() => onConnect(expression)}
+            />
+          );
+        })}
       </CssValueListArrowFocus>
       <PanelContent as={Flex} gap="1" css={{ pt: theme.spacing[3] }}>
         <InputField
@@ -215,7 +212,7 @@ const BindingPanel = ({
   valueError?: string;
   value?: string;
   currentValue?: unknown;
-  fieldHint?: CustomSlotFieldHint;
+  fieldHint?: BuilderComponentFieldHint;
   onChange: () => void;
   onSave: (value: string, invalid: boolean) => void;
   onConnect: (expression: string) => void;
@@ -253,7 +250,7 @@ const BindingPanel = ({
         width: theme.spacing[30],
       }}
     >
-      <CustomSlotConnectSection
+      <BuilderComponentConnectSection
         aliases={aliases}
         value={value}
         currentValue={currentValue}
@@ -489,7 +486,7 @@ export const BindingPopover = ({
 }: {
   scope: Record<string, unknown>;
   aliases: Map<string, string>;
-  fieldHint?: CustomSlotFieldHint;
+  fieldHint?: BuilderComponentFieldHint;
   variant: BindingVariant;
   validate?: (value: unknown) => undefined | string;
   value?: string;

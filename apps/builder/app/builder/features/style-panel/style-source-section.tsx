@@ -7,11 +7,11 @@ import {
   type StyleSource,
   type StyleSourceToken,
   type StyleDecl,
-  splitCustomSlotVariantState,
+  splitBuilderComponentChoiceState,
 } from "@webstudio-is/sdk";
 import {
-  getCustomSlotActiveVariantState,
-  getCustomSlotVariantStates,
+  getBuilderComponentActiveChoiceState,
+  getBuilderComponentChoiceStates,
   type RenameStyleSourceError,
 } from "@webstudio-is/project-build/runtime";
 import { type ItemSource, StyleSourceInput } from "./style-source";
@@ -44,6 +44,7 @@ import {
   $selectedInstanceSelector,
 } from "~/shared/nano-states";
 import { $instanceTags } from "./shared/model";
+import { StyleConditionSelect } from "./style-condition";
 
 // Declare command for this module
 declare module "~/shared/pubsub" {
@@ -63,11 +64,11 @@ const selectStyleSource = (
   const selectedStyleSources = new Map($selectedStyleSources.get());
   selectedStyleSources.set(instanceId, styleSourceId);
   $selectedStyleSources.set(selectedStyleSources);
-  // turning off a variant's hover goes back to the variant, not the base
-  const variant = splitCustomSlotVariantState($selectedStyleState.get());
+  // turning off the hover of `size: large` goes back to large, not the base
+  const choice = splitBuilderComponentChoiceState($selectedStyleState.get());
   $selectedStyleState.set(
-    state === undefined && variant !== undefined && variant.state !== ""
-      ? variant.variantState
+    state === undefined && choice !== undefined && choice.state !== ""
+      ? choice.choiceState
       : state
   );
 };
@@ -268,54 +269,54 @@ const getComponentStates = ({
 };
 
 /**
- * Inside a copy that uses a variant, states like Hover edit that variant's
- * hover, the same way styling without a state edits the variant, so a
- * variant can look different on hover like in Webflow.
+ * Inside a copy set to a choice value like `size: large`, states like Hover
+ * edit that value's hover, the same way styling without a state edits the
+ * value, so a variant can look different on hover like in Webflow.
  */
-const scopeStatesToVariant = ({
+const scopeStatesToChoice = ({
   states,
-  variantStates,
-  activeVariantState,
+  choiceStates,
+  activeChoiceState,
 }: {
   states: SelectorConfig[];
-  variantStates: Array<{ label: string; selector: string }>;
-  activeVariantState: undefined | string;
+  choiceStates: Array<{ label: string; selector: string }>;
+  activeChoiceState: undefined | string;
 }): SelectorConfig[] => {
   const result = new Map<string, SelectorConfig>();
   for (const config of states) {
-    const variant = splitCustomSlotVariantState(config.selector);
-    if (variant === undefined) {
-      if (activeVariantState === undefined || config.type !== "state") {
+    const choice = splitBuilderComponentChoiceState(config.selector);
+    if (choice === undefined) {
+      if (activeChoiceState === undefined || config.type !== "state") {
         result.set(config.selector, config);
         continue;
       }
-      const selector = `${activeVariantState}${config.selector}`;
+      const selector = `${activeChoiceState}${config.selector}`;
       result.set(selector, { ...config, selector });
       continue;
     }
-    if (variant.state === "") {
+    if (choice.state === "") {
       result.set(config.selector, config);
       continue;
     }
-    // a state already used together with a variant
-    if (variant.variantState === activeVariantState) {
+    // a state already used together with a choice value
+    if (choice.choiceState === activeChoiceState) {
       if (result.has(config.selector) === false) {
         result.set(config.selector, {
           ...config,
-          label: variant.state,
+          label: choice.state,
         });
       }
       continue;
     }
-    const variantLabel = variantStates.find(
-      (item) => item.selector === variant.variantState
+    const choiceLabel = choiceStates.find(
+      (item) => item.selector === choice.choiceState
     )?.label;
     result.set(config.selector, {
       ...config,
       label:
-        variantLabel === undefined
+        choiceLabel === undefined
           ? config.label
-          : `${variantLabel} ${variant.state}`,
+          : `${choiceLabel} ${choice.state}`,
     });
   }
   return Array.from(result.values());
@@ -350,8 +351,8 @@ const $componentStates = computed(
     const tag = instanceTags.get(selectedInstance.id);
     const meta = registeredComponentMetas.get(selectedInstance.component);
     const instanceSelector = selectedInstanceSelector ?? [];
-    // variants of the Custom Slot this element is inside
-    const variantStates = getCustomSlotVariantStates({
+    // choice values of the Builder component this element is inside
+    const choiceStates = getBuilderComponentChoiceStates({
       instances,
       dataSources,
       instanceSelector,
@@ -359,20 +360,20 @@ const $componentStates = computed(
 
     const states = getComponentStates({
       predefinedStates: pseudoClassesByTag[tag ?? ""] ?? [],
-      componentStates: [...(meta?.states ?? []), ...variantStates],
+      componentStates: [...(meta?.states ?? []), ...choiceStates],
       instanceStyleSourceIds: new Set(
         styleSourceSelections.get(selectedInstance.id)?.values
       ),
       styles: styles.values(),
       selectedStyleState,
     });
-    if (variantStates.length === 0) {
+    if (choiceStates.length === 0) {
       return states;
     }
-    return scopeStatesToVariant({
+    return scopeStatesToChoice({
       states,
-      variantStates,
-      activeVariantState: getCustomSlotActiveVariantState({
+      choiceStates,
+      activeChoiceState: getBuilderComponentActiveChoiceState({
         instances,
         dataSources,
         instanceSelector,
@@ -522,6 +523,7 @@ export const StyleSourcesSection = () => {
           setError(undefined);
         }}
       />
+      <StyleConditionSelect />
       <DeleteStyleSourceDialog
         styleSource={tokenToDelete}
         onClose={() => {
@@ -537,7 +539,7 @@ export const StyleSourcesSection = () => {
 };
 
 export const __testing__ = {
-  scopeStatesToVariant,
+  scopeStatesToChoice,
   clearStyles,
   convertLocalStyleSourceToToken,
   duplicateStyleSource,

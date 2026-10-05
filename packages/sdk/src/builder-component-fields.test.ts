@@ -1,26 +1,29 @@
 import { describe, expect, test } from "vitest";
 import type { Instances } from "./schema/instances";
 import type { Pages } from "./schema/pages";
-import { customSlotComponent, getCustomSlotContentRootId } from "./custom-slot";
 import {
-  applyCustomSlotOverrides,
-  getCustomSlotEnclosingCopies,
-  getCustomSlotOverrideTarget,
-  parseCustomSlotOverrides,
-  type CustomSlotOverrides,
-  getCustomSlotPageHref,
-  getCustomSlotVariantAttribute,
-  getCustomSlotVariantState,
-  splitCustomSlotVariantState,
-  parseCustomSlotFields,
-  getCustomSlotFieldIssue,
-  parseCustomSlotFieldValues,
-  resolveCustomSlotFields,
-  resolveCustomSlotPageValues,
-  type CustomSlotFieldValues,
-} from "./custom-slot-fields";
+  builderComponent,
+  getBuilderComponentContentRootId,
+} from "./builder-component";
+import {
+  applyBuilderComponentOverrides,
+  getBuilderComponentEnclosingCopies,
+  getBuilderComponentOverrideTarget,
+  parseBuilderComponentOverrides,
+  type BuilderComponentOverrides,
+  getBuilderComponentPageHref,
+  getBuilderComponentChoiceAttribute,
+  getBuilderComponentChoiceState,
+  splitBuilderComponentChoiceState,
+  parseBuilderComponentFields,
+  getBuilderComponentFieldIssue,
+  parseBuilderComponentFieldValues,
+  resolveBuilderComponentFields,
+  resolveBuilderComponentPageValues,
+  type BuilderComponentFieldValues,
+} from "./builder-component-fields";
 
-const fields = parseCustomSlotFields([
+const fields = parseBuilderComponentFields([
   { id: "image-id", name: "image" },
   { id: "heading-id", name: "heading" },
   { id: "description-id", name: "description" },
@@ -28,11 +31,11 @@ const fields = parseCustomSlotFields([
   { id: "button-url-id", name: "buttonUrl" },
 ]);
 
-describe("custom slot fields", () => {
+describe("Builder component fields", () => {
   test("resolves four independent card occurrences after adding a field", async () => {
     const cards = ["Design", "Applications", "Commerce", "Identity"].map(
       (heading, index) =>
-        parseCustomSlotFieldValues({
+        parseBuilderComponentFieldValues({
           "image-id": { type: "literal", value: `/image-${index}.jpg` },
           "heading-id": { type: "literal", value: heading },
           "description-id": {
@@ -45,14 +48,14 @@ describe("custom slot fields", () => {
     );
     const original = await Promise.all(
       cards.map((values) =>
-        resolveCustomSlotFields({
+        resolveBuilderComponentFields({
           fields,
           values,
           evaluateExpression: () => undefined,
         })
       )
     );
-    const extendedFields = parseCustomSlotFields([
+    const extendedFields = parseBuilderComponentFields([
       ...fields,
       {
         id: "category-id",
@@ -62,7 +65,7 @@ describe("custom slot fields", () => {
     ]);
     const updated = await Promise.all(
       cards.map((values) =>
-        resolveCustomSlotFields({
+        resolveBuilderComponentFields({
           fields: extendedFields,
           values,
           evaluateExpression: () => undefined,
@@ -91,7 +94,7 @@ describe("custom slot fields", () => {
       instances.set(`card-${index}`, {
         type: "instance",
         id: `card-${index}`,
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "card-fragment" }],
       });
     }
@@ -99,7 +102,10 @@ describe("custom slot fields", () => {
     expect(source).toBeDefined();
     source!.children.splice(1, 0, { type: "id", value: "category" });
     for (let index = 0; index < 4; index += 1) {
-      const fragmentId = getCustomSlotContentRootId(instances, `card-${index}`);
+      const fragmentId = getBuilderComponentContentRootId(
+        instances,
+        `card-${index}`
+      );
       expect(fragmentId).toBe("card-fragment");
       expect(instances.get(fragmentId!)?.children).toEqual([
         { type: "id", value: "image" },
@@ -110,15 +116,15 @@ describe("custom slot fields", () => {
   });
 
   test("keeps values across rename and ignores deleted fields", async () => {
-    const values = parseCustomSlotFieldValues({
+    const values = parseBuilderComponentFieldValues({
       "heading-id": { type: "literal", value: "Local title" },
       "button-text-id": { type: "literal", value: "Stale value" },
     });
-    const changedFields = parseCustomSlotFields([
+    const changedFields = parseBuilderComponentFields([
       { id: "heading-id", name: "title" },
       { id: "new-id", name: "category" },
     ]);
-    const result = await resolveCustomSlotFields({
+    const result = await resolveBuilderComponentFields({
       fields: changedFields,
       values,
       evaluateExpression: () => undefined,
@@ -131,11 +137,11 @@ describe("custom slot fields", () => {
   });
 
   test("evaluates expression values in the supplied occurrence scope", async () => {
-    const values: CustomSlotFieldValues = {
+    const values: BuilderComponentFieldValues = {
       "heading-id": { type: "expression", value: "titleFromPage" },
     };
     const resolve = (title: string) =>
-      resolveCustomSlotFields({
+      resolveBuilderComponentFields({
         fields,
         values,
         evaluateExpression: async (expression) =>
@@ -161,16 +167,16 @@ describe("custom slot fields", () => {
       })
     );
     expect(
-      await resolveCustomSlotFields({
-        fields: parseCustomSlotFields(storedFields),
-        values: parseCustomSlotFieldValues(storedValues),
+      await resolveBuilderComponentFields({
+        fields: parseBuilderComponentFields(storedFields),
+        values: parseBuilderComponentFieldValues(storedValues),
         evaluateExpression: () => undefined,
       })
     ).toEqual({ heading: "Persisted" });
   });
 });
 
-describe("custom slot link properties", () => {
+describe("Builder component link properties", () => {
   const pages = {
     homePageId: "home",
     rootFolderId: "root",
@@ -208,7 +214,7 @@ describe("custom slot link properties", () => {
 
   test("keeps link type and page values", () => {
     expect(
-      parseCustomSlotFields([
+      parseBuilderComponentFields([
         { id: "link-id", name: "link", type: "link" },
         { id: "label-id", name: "label", type: "unknown" },
       ])
@@ -217,7 +223,7 @@ describe("custom slot link properties", () => {
       { id: "label-id", name: "label" },
     ]);
     expect(
-      parseCustomSlotFieldValues({
+      parseBuilderComponentFieldValues({
         a: { type: "page", value: "about" },
         b: { type: "page", value: { pageId: "about", instanceId: "faq" } },
         c: { type: "page", value: 1 },
@@ -238,29 +244,29 @@ describe("custom slot link properties", () => {
         value: "faq",
       },
     ];
-    expect(getCustomSlotPageHref({ value: "about", pages, props: [] })).toEqual(
-      "/about"
-    );
     expect(
-      getCustomSlotPageHref({
+      getBuilderComponentPageHref({ value: "about", pages, props: [] })
+    ).toEqual("/about");
+    expect(
+      getBuilderComponentPageHref({
         value: { pageId: "about", instanceId: "faq" },
         pages,
         props,
       })
     ).toEqual("/about#faq");
     expect(
-      getCustomSlotPageHref({ value: "missing", pages, props: [] })
+      getBuilderComponentPageHref({ value: "missing", pages, props: [] })
     ).toBeUndefined();
   });
 
   test("resolves page values when rendering an occurrence", async () => {
     expect(
-      await resolveCustomSlotFields({
+      await resolveBuilderComponentFields({
         fields: [{ id: "link-id", name: "link", type: "link" }],
         values: { "link-id": { type: "page", value: "about" } },
         evaluateExpression: () => undefined,
         resolvePage: (value) =>
-          getCustomSlotPageHref({ value, pages, props: [] }),
+          getBuilderComponentPageHref({ value, pages, props: [] }),
       })
     ).toEqual({ link: "/about" });
   });
@@ -273,7 +279,7 @@ describe("custom slot link properties", () => {
           type: "variable" as const,
           id: "schema",
           scopeInstanceId: "fragment",
-          name: "__customSlotSchema",
+          name: "__builderComponentSchema",
           value: {
             type: "json" as const,
             value: [
@@ -293,7 +299,7 @@ describe("custom slot link properties", () => {
           type: "variable" as const,
           id: "values",
           scopeInstanceId: "slot",
-          name: "__customSlotValues",
+          name: "__builderComponentValues",
           value: {
             type: "json" as const,
             value: { "link-id": { type: "page", value: "about" } },
@@ -301,7 +307,7 @@ describe("custom slot link properties", () => {
         },
       ],
     ]);
-    const resolved = resolveCustomSlotPageValues({
+    const resolved = resolveBuilderComponentPageValues({
       dataSources,
       pages,
       props: [],
@@ -336,87 +342,71 @@ describe("custom slot link properties", () => {
   });
 });
 
-describe("custom slot variants", () => {
-  test("keeps variant options and drops malformed ones", () => {
-    expect(
-      parseCustomSlotFields([
-        {
-          id: "size-id",
-          name: "size",
-          type: "variant",
-          options: [
-            { id: "small-id", name: "Small" },
-            { id: "large-id", name: "Large" },
-            { id: "small-id", name: "Duplicate" },
-            { id: "bad id", name: "Spaces" },
-            { name: "No id" },
-          ],
-        },
-      ])
-    ).toEqual([
-      {
-        id: "size-id",
-        name: "size",
-        type: "variant",
-        options: [
-          { id: "small-id", name: "Small" },
-          { id: "large-id", name: "Large" },
-        ],
-      },
-    ]);
-  });
-
-  test("builds the style state that targets copies using an option", () => {
-    expect(getCustomSlotVariantState("small-id")).toEqual(
-      ':is([data-ws-variant~="small-id"] *)'
+describe("Builder component choice conditions", () => {
+  test("builds the style condition for copies using a value", () => {
+    expect(getBuilderComponentChoiceState("size-id", "large")).toEqual(
+      ':is([data-ws-props~="size-id=large"] *)'
+    );
+    // values with spaces or quotes stay one attribute token
+    expect(getBuilderComponentChoiceState("label-id", 'Summer "sale"')).toEqual(
+      ':is([data-ws-props~="label-id=Summer%20%22sale%22"] *)'
     );
   });
 
-  test("lists the options a copy uses as one attribute value", () => {
-    const fields = parseCustomSlotFields([
+  test("lists the values a copy uses as one attribute value", () => {
+    const fields = parseBuilderComponentFields([
       {
         id: "size-id",
         name: "size",
-        type: "variant",
-        options: [
-          { id: "small-id", name: "Small" },
-          { id: "large-id", name: "Large" },
-        ],
+        type: "choice",
+        choices: ["small", "large"],
+        defaultValue: { type: "literal", value: "small" },
       },
       {
         id: "tone-id",
         name: "tone",
-        type: "variant",
-        options: [{ id: "primary-id", name: "Primary" }],
-        defaultValue: { type: "literal", value: "primary-id" },
+        type: "choice",
+        choices: ["light", "dark"],
+        defaultValue: { type: "literal", value: "light" },
       },
       { id: "label-id", name: "label" },
     ]);
     expect(
-      getCustomSlotVariantAttribute(fields, {
-        "size-id": { type: "literal", value: "large-id" },
-        // unknown options are ignored
-        "label-id": { type: "literal", value: "small-id" },
+      getBuilderComponentChoiceAttribute(fields, {
+        "size-id": { type: "literal", value: "large" },
+        // removed choices and other properties are ignored
+        "tone-id": { type: "literal", value: "removed" },
+        "label-id": { type: "literal", value: "small" },
       })
-    ).toEqual("large-id primary-id");
-    expect(getCustomSlotVariantAttribute(fields, {})).toEqual("primary-id");
+    ).toEqual("size-id=large");
+    expect(getBuilderComponentChoiceAttribute(fields, {})).toEqual(
+      "size-id=small tone-id=light"
+    );
   });
 
-  test("variants are not part of the component value", async () => {
+  test("choice values are part of the component value", async () => {
     expect(
-      await resolveCustomSlotFields({
-        fields: [{ id: "size-id", name: "size", type: "variant", options: [] }],
+      await resolveBuilderComponentFields({
+        fields: [
+          {
+            id: "size-id",
+            name: "size",
+            type: "choice",
+            choices: ["small"],
+            defaultValue: { type: "literal", value: "small" },
+          },
+        ],
         values: {},
         evaluateExpression: () => undefined,
       })
-    ).toEqual({});
+    ).toEqual({ size: "small" });
   });
 });
 
-describe("custom slot html and boolean properties", () => {
+describe("Builder component html and boolean properties", () => {
   test("keeps html and boolean types", () => {
     expect(
-      parseCustomSlotFields([
+      parseBuilderComponentFields([
         { id: "icon-id", name: "icon", type: "html" },
         {
           id: "show-id",
@@ -438,7 +428,7 @@ describe("custom slot html and boolean properties", () => {
 
   test("resolves booleans as real booleans for Show", async () => {
     expect(
-      await resolveCustomSlotFields({
+      await resolveBuilderComponentFields({
         fields: [
           {
             id: "show-id",
@@ -454,13 +444,15 @@ describe("custom slot html and boolean properties", () => {
   });
 });
 
-describe("custom slot image properties", () => {
+describe("Builder component image properties", () => {
   test("keeps image type and asset values", () => {
     expect(
-      parseCustomSlotFields([{ id: "image-id", name: "image", type: "image" }])
+      parseBuilderComponentFields([
+        { id: "image-id", name: "image", type: "image" },
+      ])
     ).toEqual([{ id: "image-id", name: "image", type: "image" }]);
     expect(
-      parseCustomSlotFieldValues({
+      parseBuilderComponentFieldValues({
         a: { type: "asset", value: "asset-id" },
         b: { type: "asset", value: 1 },
       })
@@ -469,7 +461,7 @@ describe("custom slot image properties", () => {
 
   test("resolves assets when rendering an occurrence", async () => {
     expect(
-      await resolveCustomSlotFields({
+      await resolveBuilderComponentFields({
         fields: [{ id: "image-id", name: "image", type: "image" }],
         values: { "image-id": { type: "asset", value: "asset-id" } },
         evaluateExpression: () => undefined,
@@ -486,7 +478,7 @@ describe("custom slot image properties", () => {
           type: "variable" as const,
           id: "values",
           scopeInstanceId: "slot",
-          name: "__customSlotValues",
+          name: "__builderComponentValues",
           value: {
             type: "json" as const,
             value: { "image-id": { type: "asset", value: "asset-id" } },
@@ -494,7 +486,7 @@ describe("custom slot image properties", () => {
         },
       ],
     ]);
-    const resolved = resolveCustomSlotPageValues({
+    const resolved = resolveBuilderComponentPageValues({
       dataSources,
       pages: {
         homePageId: "home",
@@ -516,7 +508,7 @@ describe("custom slot image properties", () => {
   });
 });
 
-describe("custom slot overrides", () => {
+describe("Builder component overrides", () => {
   // body > card-a (copy) > card-fragment > button (copy)
   const instances: Instances = new Map([
     [
@@ -524,7 +516,7 @@ describe("custom slot overrides", () => {
       {
         type: "instance",
         id: "card-a",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "card-fragment" }],
       },
     ],
@@ -542,7 +534,7 @@ describe("custom slot overrides", () => {
       {
         type: "instance",
         id: "button",
-        component: customSlotComponent,
+        component: builderComponent,
         children: [{ type: "id", value: "button-fragment" }],
       },
     ],
@@ -559,32 +551,32 @@ describe("custom slot overrides", () => {
 
   test("finds the copies a nested copy is inside, innermost first", () => {
     expect(
-      getCustomSlotEnclosingCopies(instances, [
+      getBuilderComponentEnclosingCopies(instances, [
         "button",
         "card-fragment",
         "card-a",
         "body",
       ])
     ).toEqual(["card-a"]);
-    expect(getCustomSlotEnclosingCopies(instances, ["card-a", "body"])).toEqual(
-      []
-    );
+    expect(
+      getBuilderComponentEnclosingCopies(instances, ["card-a", "body"])
+    ).toEqual([]);
   });
 
   test("names the override a parent copy stores for a nested copy", () => {
-    expect(getCustomSlotOverrideTarget(["card-a"], "button")).toEqual({
+    expect(getBuilderComponentOverrideTarget(["card-a"], "button")).toEqual({
       ownerSlotId: "card-a",
       key: "button",
     });
     // deeper nesting stores on the outermost copy with the full path
     expect(
-      getCustomSlotOverrideTarget(["inner-card", "section"], "button")
+      getBuilderComponentOverrideTarget(["inner-card", "section"], "button")
     ).toEqual({ ownerSlotId: "section", key: "inner-card/button" });
-    expect(getCustomSlotOverrideTarget([], "button")).toBeUndefined();
+    expect(getBuilderComponentOverrideTarget([], "button")).toBeUndefined();
   });
 
   test("applies parent overrides on top of the nested copy's values", () => {
-    const overrides: Record<string, CustomSlotOverrides> = {
+    const overrides: Record<string, BuilderComponentOverrides> = {
       "card-a": {
         button: { label: { type: "literal", value: "Read more" } },
       },
@@ -592,12 +584,12 @@ describe("custom slot overrides", () => {
         "inner-card/button": { label: { type: "literal", value: "Outer" } },
       },
     };
-    const shared: CustomSlotFieldValues = {
+    const shared: BuilderComponentFieldValues = {
       label: { type: "literal", value: "Shared" },
       link: { type: "literal", value: "/shared" },
     };
     expect(
-      applyCustomSlotOverrides({
+      applyBuilderComponentOverrides({
         values: shared,
         slotId: "button",
         enclosingCopyIds: ["card-a"],
@@ -609,7 +601,7 @@ describe("custom slot overrides", () => {
     });
     // the outermost copy wins
     expect(
-      applyCustomSlotOverrides({
+      applyBuilderComponentOverrides({
         values: shared,
         slotId: "button",
         enclosingCopyIds: ["inner-card", "section"],
@@ -620,7 +612,7 @@ describe("custom slot overrides", () => {
 
   test("parses overrides and drops malformed entries", () => {
     expect(
-      parseCustomSlotOverrides({
+      parseBuilderComponentOverrides({
         button: {
           label: { type: "literal", value: "Go" },
           broken: { type: "nope" },
@@ -632,7 +624,7 @@ describe("custom slot overrides", () => {
 });
 
 test("resolves page links stored in overrides before publishing", () => {
-  const resolved = resolveCustomSlotPageValues({
+  const resolved = resolveBuilderComponentPageValues({
     dataSources: new Map([
       [
         "overrides",
@@ -640,7 +632,7 @@ test("resolves page links stored in overrides before publishing", () => {
           type: "variable" as const,
           id: "overrides",
           scopeInstanceId: "card-a",
-          name: "__customSlotOverrides",
+          name: "__builderComponentOverrides",
           value: {
             type: "json" as const,
             value: { button: { link: { type: "asset", value: "photo" } } },
@@ -667,7 +659,7 @@ test("resolves page links stored in overrides before publishing", () => {
   });
 });
 
-test("publishing without Custom Slots leaves data sources untouched", () => {
+test("publishing without Builder components leaves data sources untouched", () => {
   const dataSources = new Map([
     [
       "title",
@@ -681,7 +673,7 @@ test("publishing without Custom Slots leaves data sources untouched", () => {
     ],
   ]);
   expect(
-    resolveCustomSlotPageValues({
+    resolveBuilderComponentPageValues({
       dataSources,
       pages: {
         homePageId: "home",
@@ -694,76 +686,59 @@ test("publishing without Custom Slots leaves data sources untouched", () => {
   ).toBe(dataSources);
 });
 
-test("keeps a custom name for the base variant", () => {
+test("splits the hover of a choice value into the value and the state", () => {
   expect(
-    parseCustomSlotFields([
-      {
-        id: "variant",
-        name: "variant",
-        type: "variant",
-        baseName: "Primary",
-        options: [{ id: "outline", name: "Outline" }],
-      },
-      // an empty name falls back to "Base" in the UI
-      { id: "other", name: "other", type: "variant", baseName: "" },
-    ])
-  ).toEqual([
-    {
-      id: "variant",
-      name: "variant",
-      type: "variant",
-      baseName: "Primary",
-      options: [{ id: "outline", name: "Outline" }],
-    },
-    { id: "other", name: "other", type: "variant", options: [] },
-  ]);
-});
-
-test("splits a variant's hover into the variant and the state", () => {
-  expect(
-    splitCustomSlotVariantState(`${getCustomSlotVariantState("small")}:hover`)
+    splitBuilderComponentChoiceState(
+      `${getBuilderComponentChoiceState("size-id", "extra large")}:hover`
+    )
   ).toEqual({
-    variantState: getCustomSlotVariantState("small"),
-    optionId: "small",
+    choiceState: getBuilderComponentChoiceState("size-id", "extra large"),
+    token: "size-id=extra%20large",
+    fieldId: "size-id",
+    value: "extra large",
     state: ":hover",
   });
   expect(
-    splitCustomSlotVariantState(getCustomSlotVariantState("small"))?.state
+    splitBuilderComponentChoiceState(
+      getBuilderComponentChoiceState("size-id", "small")
+    )?.state
   ).toEqual("");
-  expect(splitCustomSlotVariantState(":hover")).toBeUndefined();
-  expect(splitCustomSlotVariantState(undefined)).toBeUndefined();
+  expect(splitBuilderComponentChoiceState(":hover")).toBeUndefined();
+  expect(splitBuilderComponentChoiceState(undefined)).toBeUndefined();
 });
 
 test("reports missing, mismatched and removed choice values", () => {
   const text = { id: "a", name: "title", type: "text" as const };
-  expect(getCustomSlotFieldIssue(text, undefined)?.type).toEqual("missing");
+  expect(getBuilderComponentFieldIssue(text, undefined)?.type).toEqual(
+    "missing"
+  );
   expect(
-    getCustomSlotFieldIssue(
+    getBuilderComponentFieldIssue(
       { ...text, defaultValue: { type: "literal", value: "Hi" } },
       undefined
     )
   ).toBeUndefined();
   expect(
-    getCustomSlotFieldIssue(
+    getBuilderComponentFieldIssue(
       { id: "b", name: "count", type: "number" },
       { type: "literal", value: "large" }
     )?.type
   ).toEqual("type");
   expect(
-    getCustomSlotFieldIssue(
+    getBuilderComponentFieldIssue(
       { id: "c", name: "size", type: "choice", choices: ["small"] },
       { type: "literal", value: "large" }
     )?.type
   ).toEqual("choice");
   expect(
-    getCustomSlotFieldIssue(
+    getBuilderComponentFieldIssue(
       { id: "d", name: "items", type: "json" },
       { type: "literal", value: [1, 2] }
     )
   ).toBeUndefined();
   // expressions are checked when they run
   expect(
-    getCustomSlotFieldIssue(
+    getBuilderComponentFieldIssue(
       { id: "e", name: "count", type: "number" },
       { type: "expression", value: "$ws$dataSource$x" }
     )
@@ -772,7 +747,7 @@ test("reports missing, mismatched and removed choice values", () => {
 
 test("parses number, JSON and choice properties", () => {
   expect(
-    parseCustomSlotFields([
+    parseBuilderComponentFields([
       { id: "a", name: "count", type: "number" },
       { id: "b", name: "items", type: "json" },
       { id: "c", name: "size", type: "choice", choices: ["s", "s", "", "l"] },

@@ -1154,9 +1154,9 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       description: "Turn the selected element into a reusable component",
       category: "Navigator",
       defaultHotkeys: ["meta+alt+k", "ctrl+alt+k"],
-      hidden: isFeatureEnabled("customSlot") === false,
+      hidden: isFeatureEnabled("builderComponent") === false,
       handler: () => {
-        if (isFeatureEnabled("customSlot") === false) {
+        if (isFeatureEnabled("builderComponent") === false) {
           return;
         }
         if (

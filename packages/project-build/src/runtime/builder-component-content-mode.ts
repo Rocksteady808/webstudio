@@ -1,15 +1,15 @@
 import { applyPatches, type Patch } from "immer";
 import "../state/immer";
 import {
-  customSlotComponent,
-  customSlotOverridesVariable,
-  customSlotValuesVariable,
-  getCustomSlotCopy,
-  parseCustomSlotFieldValues,
-  parseCustomSlotOverrides,
-  type CustomSlotField,
-  type CustomSlotFieldValue,
-  type CustomSlotFieldValues,
+  builderComponent,
+  builderComponentOverridesVariable,
+  builderComponentValuesVariable,
+  getBuilderComponentCopy,
+  parseBuilderComponentFieldValues,
+  parseBuilderComponentOverrides,
+  type BuilderComponentField,
+  type BuilderComponentFieldValue,
+  type BuilderComponentFieldValues,
   type DataSource,
   type DataSources,
   type Instance,
@@ -25,19 +25,20 @@ const isEqual = (left: unknown, right: unknown) =>
 /**
  * Content editors fill in a copy's values like Figma instance properties.
  * HTML Embed code, data bindings and everything about the shared design
- * (properties, defaults, variants, tag, structure) stay with designers.
+ * (properties, defaults, choices, tag, structure) stay with designers.
  */
-const contentEditableFieldTypes = new Set<CustomSlotField["type"]>([
+const contentEditableFieldTypes = new Set<BuilderComponentField["type"]>([
   "text",
+  "richText",
   "link",
   "boolean",
   "image",
-  "variant",
+  "choice",
 ]);
 
 const isContentEditableValue = (
-  field: CustomSlotField,
-  value: CustomSlotFieldValue
+  field: BuilderComponentField,
+  value: BuilderComponentFieldValue
 ) => {
   const type = field.type ?? "text";
   if (value.type === "page") {
@@ -52,15 +53,15 @@ const isContentEditableValue = (
   if (type === "boolean") {
     return typeof value.value === "boolean";
   }
-  if (type === "variant") {
-    return field.options?.some((option) => option.id === value.value) ?? false;
+  if (type === "choice") {
+    return field.choices?.includes(value.value as string) ?? false;
   }
   return typeof value.value === "string";
 };
 
-export const isCustomSlotFieldContentEditable = (
-  field: CustomSlotField,
-  localValue: undefined | CustomSlotFieldValue
+export const isBuilderComponentFieldContentEditable = (
+  field: BuilderComponentField,
+  localValue: undefined | BuilderComponentFieldValue
 ) =>
   contentEditableFieldTypes.has(field.type ?? "text") &&
   localValue?.type !== "expression";
@@ -70,9 +71,9 @@ const validateFieldChanges = ({
   before,
   after,
 }: {
-  fields: CustomSlotField[];
-  before: CustomSlotFieldValues;
-  after: CustomSlotFieldValues;
+  fields: BuilderComponentField[];
+  before: BuilderComponentFieldValues;
+  after: BuilderComponentFieldValues;
 }): Result => {
   for (const fieldId of new Set([
     ...Object.keys(before),
@@ -84,7 +85,7 @@ const validateFieldChanges = ({
     const field = fields.find((item) => item.id === fieldId);
     if (
       field === undefined ||
-      isCustomSlotFieldContentEditable(field, before[fieldId]) === false
+      isBuilderComponentFieldContentEditable(field, before[fieldId]) === false
     ) {
       return fail("This property can only be changed in design mode.");
     }
@@ -101,8 +102,9 @@ const getCopyFields = (
   dataSources: DataSources,
   slotId: Instance["id"]
 ) =>
-  instances.get(slotId)?.component === customSlotComponent
-    ? (getCustomSlotCopy({ instances, dataSources, slotId })?.fields ?? [])
+  instances.get(slotId)?.component === builderComponent
+    ? (getBuilderComponentCopy({ instances, dataSources, slotId })?.fields ??
+      [])
     : undefined;
 
 const readJson = (dataSource: undefined | DataSource) =>
@@ -127,8 +129,8 @@ const validateDataSourceChange = ({
   if (
     source === undefined ||
     source.type !== "variable" ||
-    (source.name !== customSlotValuesVariable &&
-      source.name !== customSlotOverridesVariable)
+    (source.name !== builderComponentValuesVariable &&
+      source.name !== builderComponentOverridesVariable)
   ) {
     return fail(`Data sources are not editable in content mode.`);
   }
@@ -150,27 +152,27 @@ const validateDataSourceChange = ({
   }
   const slotId = after.scopeInstanceId ?? "";
   if (
-    instances.get(slotId)?.component !== customSlotComponent ||
+    instances.get(slotId)?.component !== builderComponent ||
     editableInstanceIds.has(slotId) === false
   ) {
     return fail("This copy is not editable in content mode.");
   }
-  if (after.name === customSlotValuesVariable) {
-    const values = parseCustomSlotFieldValues(after.value.value);
+  if (after.name === builderComponentValuesVariable) {
+    const values = parseBuilderComponentFieldValues(after.value.value);
     if (isEqual(values, after.value.value) === false) {
       return fail("Invalid copy values.");
     }
     return validateFieldChanges({
       fields: getCopyFields(instances, dataSources, slotId) ?? [],
-      before: parseCustomSlotFieldValues(readJson(before)),
+      before: parseBuilderComponentFieldValues(readJson(before)),
       after: values,
     });
   }
-  const overrides = parseCustomSlotOverrides(after.value.value);
+  const overrides = parseBuilderComponentOverrides(after.value.value);
   if (isEqual(overrides, after.value.value) === false) {
     return fail("Invalid copy values.");
   }
-  const previous = parseCustomSlotOverrides(readJson(before));
+  const previous = parseBuilderComponentOverrides(readJson(before));
   for (const key of new Set([
     ...Object.keys(previous),
     ...Object.keys(overrides),
@@ -178,7 +180,7 @@ const validateDataSourceChange = ({
     const path = key.split("/");
     const nestedSlotId = path[path.length - 1];
     const fields = path.every(
-      (id) => instances.get(id)?.component === customSlotComponent
+      (id) => instances.get(id)?.component === builderComponent
     )
       ? getCopyFields(instances, dataSources, nestedSlotId)
       : undefined;
@@ -198,10 +200,10 @@ const validateDataSourceChange = ({
 };
 
 /**
- * Checks data source patches sent in content mode: only Custom Slot copy
+ * Checks data source patches sent in content mode: only Builder component copy
  * values and nested copy overrides inside editable content may change.
  */
-export const applyCustomSlotContentModeDataSourcePatches = ({
+export const applyBuilderComponentContentModeDataSourcePatches = ({
   instances,
   editableInstanceIds,
   dataSources,

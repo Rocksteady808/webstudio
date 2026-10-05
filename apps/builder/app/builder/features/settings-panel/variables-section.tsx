@@ -44,7 +44,7 @@ import {
 import {
   findAvailableVariables,
   findUsedVariables,
-  isCustomSlotInternalVariable,
+  isBuilderComponentInternalVariable,
 } from "@webstudio-is/project-build/runtime";
 import {
   DeleteDataVariableDialog,
@@ -67,7 +67,9 @@ const $availableVariables = computed(
     });
     // order local variables first
     return Array.from(availableVariables.values())
-      .filter((variable) => isCustomSlotInternalVariable(variable) === false)
+      .filter(
+        (variable) => isBuilderComponentInternalVariable(variable) === false
+      )
       .sort((left, right) => {
         const leftRank = left.scopeInstanceId === selectedInstance.id ? 0 : 1;
         const rightRank = right.scopeInstanceId === selectedInstance.id ? 0 : 1;

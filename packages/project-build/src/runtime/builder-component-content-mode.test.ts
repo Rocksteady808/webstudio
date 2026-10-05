@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 import {
   blockComponent,
-  createCustomSlotFragment,
-  getCustomSlotContentRootId,
+  createBuilderComponentFragment,
+  getBuilderComponentContentRootId,
   type WebstudioData,
 } from "@webstudio-is/sdk";
 import { applyBuilderPatchTransactions } from "../state/patch";
@@ -15,9 +15,9 @@ import {
   getContentModeEditableInstanceIds,
 } from "./content-mode-permissions";
 import {
-  createCustomSlotField,
-  setCustomSlotFieldValue,
-} from "./custom-slot-fields";
+  createBuilderComponentField,
+  setBuilderComponentFieldValue,
+} from "./builder-component-fields";
 
 const createIdFactory = () => {
   let index = 0;
@@ -66,7 +66,7 @@ const createCards = () => {
     assets: new Map(),
   };
   const insertCopy = (parentId: string) => {
-    const fragment = createCustomSlotFragment({ createId });
+    const fragment = createBuilderComponentFragment({ createId });
     const { newInstanceIds } = insertWebstudioFragmentCopy({
       data,
       fragment,
@@ -80,7 +80,8 @@ const createCards = () => {
   };
   const inBlock = insertCopy("block");
   const onPage = insertCopy("body");
-  const fragmentId = getCustomSlotContentRootId(data.instances, inBlock) ?? "";
+  const fragmentId =
+    getBuilderComponentContentRootId(data.instances, inBlock) ?? "";
   data.instances.get(fragmentId)?.children.push({ type: "id", value: "title" });
   data.instances.set("title", {
     type: "instance",
@@ -91,8 +92,10 @@ const createCards = () => {
   });
   let state = data as BuilderState;
   const context = { createId };
-  const addField = (input: Parameters<typeof createCustomSlotField>[1]) => {
-    const mutation = createCustomSlotField(state, input, context);
+  const addField = (
+    input: Parameters<typeof createBuilderComponentField>[1]
+  ) => {
+    const mutation = createBuilderComponentField(state, input, context);
     state = apply(state, mutation);
     return mutation.result.fieldId;
   };
@@ -101,8 +104,8 @@ const createCards = () => {
   const variant = addField({
     fragmentId,
     name: "variant",
-    type: "variant",
-    options: [{ id: "reverse", name: "Reverse" }],
+    type: "choice",
+    choices: ["default", "reverse"],
   });
   return {
     state,
@@ -137,8 +140,8 @@ const asContentEditor = (
 
 const setValue = (
   cards: Cards,
-  input: Parameters<typeof setCustomSlotFieldValue>[1]
-) => setCustomSlotFieldValue(cards.state, input, cards.context);
+  input: Parameters<typeof setBuilderComponentFieldValue>[1]
+) => setBuilderComponentFieldValue(cards.state, input, cards.context);
 
 test("content editors fill in text values of a copy in editable content", () => {
   const cards = createCards();
@@ -170,7 +173,7 @@ test("content editors fill in text values of a copy in editable content", () => 
   expect(reset.success).toBe(true);
 });
 
-test("content editors pick one of the existing variants", () => {
+test("content editors pick one of the existing choices", () => {
   const cards = createCards();
   expect(
     asContentEditor(
@@ -231,7 +234,7 @@ test("a value bound to data by a designer cannot be replaced", () => {
   expect(
     asContentEditor(
       bound,
-      setCustomSlotFieldValue(
+      setBuilderComponentFieldValue(
         bound,
         {
           slotId: cards.inBlock,
@@ -249,7 +252,7 @@ test("content editors cannot change properties or copies outside content", () =>
   expect(
     asContentEditor(
       cards.state,
-      createCustomSlotField(
+      createBuilderComponentField(
         cards.state,
         { fragmentId: cards.fragmentId, name: "extra" },
         cards.context

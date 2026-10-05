@@ -167,7 +167,7 @@ const handleEdit = (
     }
 
     // Select the instance when no editable parent is found,
-    // or the Custom Slot copy around it to fill in the copy's values
+    // or the Builder component copy around it to fill in the copy's values
     const selector = getCanvasClickSelector({
       clickedSelector: instanceSelector,
       selectedSelector: $selectedInstanceSelector.get(),

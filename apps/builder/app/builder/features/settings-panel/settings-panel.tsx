@@ -4,8 +4,8 @@ import { PropsSectionContainer } from "./props-section/props-section";
 import { VariablesSection } from "./variables-section";
 import {
   BrokenPropertyConnectionsBanner,
-  CustomSlotPropertiesSection,
-} from "./custom-slot-properties-section";
+  BuilderComponentPropertiesSection,
+} from "./builder-component-properties-section";
 import {
   Box,
   Flex,
@@ -36,7 +36,7 @@ export const SettingsPanel = ({
 
       <BrokenPropertyConnectionsBanner />
 
-      <CustomSlotPropertiesSection />
+      <BuilderComponentPropertiesSection />
 
       <PropsSectionContainer
         selectedInstance={selectedInstance}

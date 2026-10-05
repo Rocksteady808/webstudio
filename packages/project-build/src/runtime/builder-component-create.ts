@@ -3,21 +3,21 @@ import { transpileExpression } from "@webstudio-is/expression";
 import {
   ROOT_INSTANCE_ID,
   SYSTEM_VARIABLE_ID,
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotOverridesVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentOverridesVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
   decodeDataVariableId,
   defaultComponentName,
   encodeDataVariableId,
   findTreeInstanceIds,
   findTreeInstanceIdsExcludingSlotDescendants,
-  parseCustomSlotFieldValues,
-  parseCustomSlotOverrides,
-  type CustomSlotField,
-  type CustomSlotFieldType,
-  type CustomSlotFieldValues,
+  parseBuilderComponentFieldValues,
+  parseBuilderComponentOverrides,
+  type BuilderComponentField,
+  type BuilderComponentFieldType,
+  type BuilderComponentFieldValues,
   type DataSource,
   type Instance,
   type WebstudioData,
@@ -28,9 +28,9 @@ import { produceWebstudioDataMutation, traverseExpressions } from "./data";
 import { BuilderRuntimeError, throwBuilderRuntimeError } from "./errors";
 import { createRuntimeMutation } from "./mutation";
 import {
-  isCustomSlotInternalVariable,
-  toCustomSlotFieldName,
-} from "./custom-slot-fields";
+  isBuilderComponentInternalVariable,
+  toBuilderComponentFieldName,
+} from "./builder-component-fields";
 
 /**
  * Turns selected elements into a component, like Figma's Create component:
@@ -70,7 +70,7 @@ export const listComponentNames = (
 ) => {
   const names = new Set<string>();
   for (const dataSource of data.dataSources.values()) {
-    if (dataSource.name !== customSlotSchemaVariable) {
+    if (dataSource.name !== builderComponentSchemaVariable) {
       continue;
     }
     const fragment = data.instances.get(dataSource.scopeInstanceId ?? "");
@@ -93,7 +93,7 @@ const getUniqueName = (name: string, taken: Set<string>) => {
 };
 
 const getUniqueFieldName = (name: string, taken: Set<string>) => {
-  const base = toCustomSlotFieldName(name) || "value";
+  const base = toBuilderComponentFieldName(name) || "value";
   let candidate = base;
   let index = 2;
   while (taken.has(candidate)) {
@@ -104,7 +104,7 @@ const getUniqueFieldName = (name: string, taken: Set<string>) => {
   return candidate;
 };
 
-const getFieldType = (dataSource: DataSource): CustomSlotFieldType => {
+const getFieldType = (dataSource: DataSource): BuilderComponentFieldType => {
   if (dataSource.type !== "variable") {
     return "json";
   }
@@ -143,7 +143,7 @@ const updateCopyValueExpressionsMutable = (
   instanceIds: Set<Instance["id"]>,
   update: (expression: string) => string
 ) => {
-  const updateValues = (values: CustomSlotFieldValues) => {
+  const updateValues = (values: BuilderComponentFieldValues) => {
     for (const [id, value] of Object.entries(values)) {
       if (value.type === "expression") {
         values[id] = { type: "expression", value: update(value.value) };
@@ -156,17 +156,17 @@ const updateCopyValueExpressionsMutable = (
       dataSource.value.type !== "json" ||
       instanceIds.has(dataSource.scopeInstanceId ?? "") === false ||
       data.instances.get(dataSource.scopeInstanceId ?? "")?.component !==
-        customSlotComponent
+        builderComponent
     ) {
       continue;
     }
-    if (dataSource.name === customSlotValuesVariable) {
-      const values = parseCustomSlotFieldValues(dataSource.value.value);
+    if (dataSource.name === builderComponentValuesVariable) {
+      const values = parseBuilderComponentFieldValues(dataSource.value.value);
       updateValues(values);
       dataSource.value = { type: "json", value: values };
     }
-    if (dataSource.name === customSlotOverridesVariable) {
-      const overrides = parseCustomSlotOverrides(dataSource.value.value);
+    if (dataSource.name === builderComponentOverridesVariable) {
+      const overrides = parseBuilderComponentOverrides(dataSource.value.value);
       Object.values(overrides).forEach(updateValues);
       dataSource.value = { type: "json", value: overrides };
     }
@@ -245,13 +245,13 @@ export const createComponentFromInstance = (
     for (const dataSource of draft.dataSources.values()) {
       if (
         treeIds.has(dataSource.scopeInstanceId ?? "") &&
-        isCustomSlotInternalVariable(dataSource) === false
+        isBuilderComponentInternalVariable(dataSource) === false
       ) {
         takenNames.add(dataSource.name);
       }
     }
-    const fields: CustomSlotField[] = [];
-    const values: CustomSlotFieldValues = {};
+    const fields: BuilderComponentField[] = [];
+    const values: BuilderComponentFieldValues = {};
     const replacementByIdentifier = new Map<string, string>();
     const getReplacement = (identifier: string, assignee: boolean) => {
       const existing = replacementByIdentifier.get(identifier);
@@ -277,7 +277,7 @@ export const createComponentFromInstance = (
       if (assignee) {
         throwOuterAssignment(identifier);
       }
-      const field: CustomSlotField = {
+      const field: BuilderComponentField = {
         id: context.createId(),
         name: getUniqueFieldName(dataSource.name, takenNames),
         type: getFieldType(dataSource),
@@ -323,7 +323,7 @@ export const createComponentFromInstance = (
     draft.instances.set(slotId, {
       type: "instance",
       id: slotId,
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: fragmentId }],
     });
     parent.children[childIndex] = { type: "id", value: slotId };
@@ -331,14 +331,14 @@ export const createComponentFromInstance = (
       type: "parameter",
       id: componentId,
       scopeInstanceId: fragmentId,
-      name: customSlotComponentVariable,
+      name: builderComponentParameterVariable,
     });
     const schemaId = context.createId();
     draft.dataSources.set(schemaId, {
       type: "variable",
       id: schemaId,
       scopeInstanceId: fragmentId,
-      name: customSlotSchemaVariable,
+      name: builderComponentSchemaVariable,
       value: { type: "json", value: fields },
     });
     const valuesId = context.createId();
@@ -346,7 +346,7 @@ export const createComponentFromInstance = (
       type: "variable",
       id: valuesId,
       scopeInstanceId: slotId,
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: { type: "json", value: values },
     });
   });

@@ -12,8 +12,8 @@ import {
   type StyleSourceSelection,
   createImageValueTransformer,
   addFontRules,
-  customSlotVariantAttribute,
-  splitCustomSlotVariantState,
+  builderComponentChoiceAttribute,
+  splitBuilderComponentChoiceState,
 } from "@webstudio-is/sdk";
 import { inflatedAttribute, idAttribute } from "@webstudio-is/react-sdk";
 import { INFLATE_PADDING } from "~/canvas/inflator";
@@ -679,9 +679,9 @@ const computeInstanceStyles = ({
   if (selectedInstance === undefined || selectedStyleState === undefined) {
     return;
   }
-  const variant = splitCustomSlotVariantState(selectedStyleState);
-  // variant styles already apply inside copies using the variant
-  if (variant?.state === "") {
+  const choice = splitBuilderComponentChoiceState(selectedStyleState);
+  // choice value styles already apply inside copies using the value
+  if (choice?.state === "") {
     return;
   }
   const styleSources = new Set(
@@ -698,12 +698,12 @@ const computeInstanceStyles = ({
   }
   return {
     instanceId: selectedInstance.id,
-    // a variant's hover previews only in copies using that variant,
+    // the hover of `size: large` previews only in copies using large,
     // since every copy shares the selected element
-    ...(variant !== undefined && {
-      scopeSelector: `[${customSlotVariantAttribute}~="${variant.optionId}"] `,
+    ...(choice !== undefined && {
+      scopeSelector: `[${builderComponentChoiceAttribute}~="${choice.token}"] `,
     }),
-    selectedState: variant?.state ?? selectedStyleState,
+    selectedState: choice?.state ?? selectedStyleState,
     breakpoints: Array.from(breakpoints.values()),
     styles: instanceStyles,
   };

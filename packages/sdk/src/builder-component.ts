@@ -1,10 +1,10 @@
 import type { Instance, Instances } from "./schema/instances";
 import type { DataSource, DataSources } from "./schema/data-sources";
 
-export const customSlotComponent = "ws:customSlot";
-export const customSlotSchemaVariable = "__customSlotSchema";
-export const customSlotValuesVariable = "__customSlotValues";
-export const customSlotComponentVariable = "component";
+export const builderComponent = "ws:builderComponent";
+export const builderComponentSchemaVariable = "__builderComponentSchema";
+export const builderComponentValuesVariable = "__builderComponentValues";
+export const builderComponentParameterVariable = "component";
 
 /**
  * Tags a copy can render as, so it can be the list item, article or section
@@ -12,7 +12,7 @@ export const customSlotComponentVariable = "component";
  * component keeps the page structure. Written into generated code, so only
  * known tags are allowed.
  */
-export const customSlotTags = [
+export const builderComponentTags = [
   "div",
   "article",
   "section",
@@ -26,12 +26,13 @@ export const customSlotTags = [
   "span",
 ] as const;
 
-export type CustomSlotTag = (typeof customSlotTags)[number];
+export type BuilderComponentTag = (typeof builderComponentTags)[number];
 
 /** undefined when the copy renders no element of its own */
-export const getCustomSlotTag = (
+export const getBuilderComponentTag = (
   tag: undefined | string
-): undefined | CustomSlotTag => customSlotTags.find((item) => item === tag);
+): undefined | BuilderComponentTag =>
+  builderComponentTags.find((item) => item === tag);
 
 export const defaultComponentName = "Component";
 
@@ -41,14 +42,14 @@ export const getComponentName = (
   fragmentId: undefined | Instance["id"]
 ) => instances.get(fragmentId ?? "")?.label || defaultComponentName;
 
-/** A Custom Slot occurrence points at one shared Fragment root. */
-export const getCustomSlotContentRootId = (
+/** A Builder component occurrence points at one shared Fragment root. */
+export const getBuilderComponentContentRootId = (
   instances: Instances,
   slotId: Instance["id"]
 ): Instance["id"] | undefined => {
   const slot = instances.get(slotId);
   if (
-    slot?.component !== customSlotComponent ||
+    slot?.component !== builderComponent ||
     slot.children.length !== 1 ||
     slot.children[0]?.type !== "id"
   ) {
@@ -92,7 +93,7 @@ const buildDataSourceIndex = (dataSources: DataSources) => {
  * place (runtime drafts, tests) rebuild the index when their size changes or
  * when an indexed entry no longer matches.
  */
-export const findCustomSlotDataSource = (
+export const findBuilderComponentDataSource = (
   dataSources: DataSources,
   scopeInstanceId: Instance["id"],
   name: DataSource["name"]

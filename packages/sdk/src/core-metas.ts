@@ -13,7 +13,7 @@ import type { Instance } from "./schema/instances";
 import { tagProperty } from "./runtime";
 import { tags } from "./__generated__/tags";
 import { contentBlockSourceProp } from "./schema/content-block";
-import { customSlotComponent } from "./custom-slot";
+import { builderComponent } from "./builder-component";
 
 export const rootComponent = "ws:root";
 
@@ -45,9 +45,9 @@ const elementMeta: WsComponentMeta = {
 export const portalComponent = "Slot";
 
 export const isPortalLikeComponent = (component: Instance["component"]) =>
-  component === portalComponent || component === customSlotComponent;
+  component === portalComponent || component === builderComponent;
 
-const customSlotMeta: WsComponentMeta = {
+const builderComponentMeta: WsComponentMeta = {
   label: "Component",
   icon: SlotComponentIcon,
   contentModel: {
@@ -178,7 +178,7 @@ export const coreMetas = {
   [rootComponent]: rootMeta,
   [elementComponent]: elementMeta,
   [collectionComponent]: collectionMeta,
-  [customSlotComponent]: customSlotMeta,
+  [builderComponent]: builderComponentMeta,
   [descendantComponent]: descendantMeta,
   [blockComponent]: blockMeta,
   [blockBodyComponent]: blockBodyMeta,
@@ -191,7 +191,7 @@ export const isCoreComponent = (component: Instance["component"]) =>
   component === rootComponent ||
   component === elementComponent ||
   component === collectionComponent ||
-  component === customSlotComponent ||
+  component === builderComponent ||
   component === descendantComponent ||
   component === blockComponent ||
   component === blockBodyComponent ||

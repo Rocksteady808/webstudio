@@ -1,17 +1,17 @@
 import { expect, test } from "vitest";
 import {
-  applyCustomSlotOverrides,
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotOverridesVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
+  applyBuilderComponentOverrides,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentOverridesVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
   encodeDataVariableId,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
-  getCustomSlotCopyOverrides,
-  getCustomSlotEnclosingCopies,
-  parseCustomSlotFieldValues,
+  findBuilderComponentDataSource,
+  getBuilderComponentContentRootId,
+  getBuilderComponentCopyOverrides,
+  getBuilderComponentEnclosingCopies,
+  parseBuilderComponentFieldValues,
   type DataSource,
   type Instance,
   type WebstudioData,
@@ -53,7 +53,7 @@ const createProject = (): WebstudioData => {
     {
       type: "instance",
       id: "card",
-      component: customSlotComponent,
+      component: builderComponent,
       tag: "article",
       children: [{ type: "id", value: "card-fragment" }],
     },
@@ -76,7 +76,7 @@ const createProject = (): WebstudioData => {
     {
       type: "instance",
       id: "nested-button",
-      component: customSlotComponent,
+      component: builderComponent,
       children: [{ type: "id", value: "button-fragment" }],
     },
     {
@@ -98,20 +98,20 @@ const createProject = (): WebstudioData => {
       type: "parameter",
       id: "card-component",
       scopeInstanceId: "card-fragment",
-      name: customSlotComponentVariable,
+      name: builderComponentParameterVariable,
     },
     {
       type: "variable",
       id: "card-schema",
       scopeInstanceId: "card-fragment",
-      name: customSlotSchemaVariable,
+      name: builderComponentSchemaVariable,
       value: { type: "json", value: [{ id: "heading-id", name: "heading" }] },
     },
     {
       type: "variable",
       id: "card-values",
       scopeInstanceId: "card",
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: {
         type: "json",
         value: { "heading-id": { type: "literal", value: "First card" } },
@@ -121,7 +121,7 @@ const createProject = (): WebstudioData => {
       type: "variable",
       id: "card-overrides",
       scopeInstanceId: "card",
-      name: customSlotOverridesVariable,
+      name: builderComponentOverridesVariable,
       value: {
         type: "json",
         value: {
@@ -135,20 +135,20 @@ const createProject = (): WebstudioData => {
       type: "parameter",
       id: "button-component",
       scopeInstanceId: "button-fragment",
-      name: customSlotComponentVariable,
+      name: builderComponentParameterVariable,
     },
     {
       type: "variable",
       id: "button-schema",
       scopeInstanceId: "button-fragment",
-      name: customSlotSchemaVariable,
+      name: builderComponentSchemaVariable,
       value: { type: "json", value: [{ id: "label-id", name: "label" }] },
     },
     {
       type: "variable",
       id: "button-values",
       scopeInstanceId: "nested-button",
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: {
         type: "json",
         value: { "label-id": { type: "literal", value: "Shared" } },
@@ -225,43 +225,46 @@ const createEmptyProject = (): WebstudioData => {
 
 /** Values a card shows, and the label its nested button shows inside it. */
 const readCard = (data: WebstudioData, cardId: Instance["id"]) => {
-  const values = findCustomSlotDataSource(
+  const values = findBuilderComponentDataSource(
     data.dataSources,
     cardId,
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
-  const cardFragmentId = getCustomSlotContentRootId(data.instances, cardId);
+  const cardFragmentId = getBuilderComponentContentRootId(
+    data.instances,
+    cardId
+  );
   const nestedButtonId = data.instances
     .get(cardFragmentId ?? "")
     ?.children.flatMap((child) =>
       child.type === "id" &&
-      data.instances.get(child.value)?.component === customSlotComponent
+      data.instances.get(child.value)?.component === builderComponent
         ? [child.value]
         : []
     )[0];
-  const buttonValues = findCustomSlotDataSource(
+  const buttonValues = findBuilderComponentDataSource(
     data.dataSources,
     nestedButtonId ?? "",
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
-  const label = applyCustomSlotOverrides({
-    values: parseCustomSlotFieldValues(
+  const label = applyBuilderComponentOverrides({
+    values: parseBuilderComponentFieldValues(
       buttonValues?.type === "variable" ? buttonValues.value.value : undefined
     ),
     slotId: nestedButtonId ?? "",
-    enclosingCopyIds: getCustomSlotEnclosingCopies(data.instances, [
+    enclosingCopyIds: getBuilderComponentEnclosingCopies(data.instances, [
       nestedButtonId ?? "",
       cardFragmentId ?? "",
       cardId,
     ]),
     getOverrides: (copyId) =>
-      getCustomSlotCopyOverrides(data.dataSources, copyId),
+      getBuilderComponentCopyOverrides(data.dataSources, copyId),
   })["label-id"];
   return {
     tag: data.instances.get(cardId)?.tag,
     cardFragmentId,
     nestedButtonId,
-    heading: parseCustomSlotFieldValues(
+    heading: parseBuilderComponentFieldValues(
       values?.type === "variable" ? values.value.value : undefined
     )["heading-id"],
     label,
@@ -306,14 +309,17 @@ test("pasting a card on another page shares its design and keeps its values", ()
   });
   // and they are its own data, not the original card's
   expect(
-    findCustomSlotDataSource(data.dataSources, pasted, customSlotValuesVariable)
-      ?.id
-  ).not.toEqual("card-values");
-  expect(
-    findCustomSlotDataSource(
+    findBuilderComponentDataSource(
       data.dataSources,
       pasted,
-      customSlotOverridesVariable
+      builderComponentValuesVariable
+    )?.id
+  ).not.toEqual("card-values");
+  expect(
+    findBuilderComponentDataSource(
+      data.dataSources,
+      pasted,
+      builderComponentOverridesVariable
     )?.id
   ).not.toEqual("card-overrides");
 });
@@ -329,13 +335,13 @@ test("pasting a card into another project brings its whole design", () => {
   expect(copy.label).toEqual({ type: "literal", value: "Read more" });
   // the shared design, its properties and the nested button come along
   for (const [scope, name] of [
-    ["card-fragment", customSlotComponentVariable],
-    ["card-fragment", customSlotSchemaVariable],
-    ["button-fragment", customSlotComponentVariable],
-    ["button-fragment", customSlotSchemaVariable],
+    ["card-fragment", builderComponentParameterVariable],
+    ["card-fragment", builderComponentSchemaVariable],
+    ["button-fragment", builderComponentParameterVariable],
+    ["button-fragment", builderComponentSchemaVariable],
   ] as const) {
     expect(
-      findCustomSlotDataSource(target.dataSources, scope, name)
+      findBuilderComponentDataSource(target.dataSources, scope, name)
     ).toBeDefined();
   }
   // the heading still reads this card's component value
@@ -361,9 +367,7 @@ test("duplicating a page keeps each card's values and shared design", () => {
   const copiedCardId =
     body?.children[0]?.type === "id" ? body.children[0].value : "";
   expect(copiedCardId).not.toEqual("card");
-  expect(data.instances.get(copiedCardId)?.component).toEqual(
-    customSlotComponent
-  );
+  expect(data.instances.get(copiedCardId)?.component).toEqual(builderComponent);
   const original = readCard(data, "card");
   const copy = readCard(data, copiedCardId);
   expect(copy.cardFragmentId).toEqual(original.cardFragmentId);
@@ -386,7 +390,7 @@ test("pasting through the Builder's paste operation keeps the card intact", () =
     { id: "paste", payload: mutation.payload },
   ]).state as WebstudioData;
   const [pasted] = mutation.result.rootInstanceIds;
-  expect(after.instances.get(pasted)?.component).toEqual(customSlotComponent);
+  expect(after.instances.get(pasted)?.component).toEqual(builderComponent);
   const copy = readCard(after, pasted);
   expect(copy.cardFragmentId).toEqual("card-fragment");
   expect(copy.heading).toEqual({ type: "literal", value: "First card" });

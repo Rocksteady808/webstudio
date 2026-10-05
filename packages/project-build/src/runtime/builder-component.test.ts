@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
 import {
-  customSlotComponent,
-  customSlotValuesVariable,
-  findCustomSlotDataSource,
-  getCustomSlotContentRootId,
+  builderComponent,
+  builderComponentValuesVariable,
+  findBuilderComponentDataSource,
+  getBuilderComponentContentRootId,
   type Instance,
   type WebstudioData,
 } from "@webstudio-is/sdk";
@@ -34,12 +34,12 @@ const createIdFactory = () => {
   return () => `id-${index++}`;
 };
 
-const insertCustomSlot = (
+const insertBuilderComponent = (
   data: Omit<WebstudioData, "pages">,
   createId: () => string
 ) => {
   const fragment = createComponentTemplateFragment({
-    component: customSlotComponent,
+    component: builderComponent,
     templates: new Map(),
     createId,
   });
@@ -62,13 +62,13 @@ const setLocalHeading = (
   fieldId: string,
   heading: string
 ) => {
-  const values = findCustomSlotDataSource(
+  const values = findBuilderComponentDataSource(
     data.dataSources,
     slotId,
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
   if (values?.type !== "variable") {
-    throw new Error("Custom Slot values are missing");
+    throw new Error("Builder component values are missing");
   }
   data.dataSources.set(values.id, {
     ...values,
@@ -83,31 +83,31 @@ const getLocalValues = (
   data: Omit<WebstudioData, "pages">,
   slotId: Instance["id"]
 ) => {
-  const values = findCustomSlotDataSource(
+  const values = findBuilderComponentDataSource(
     data.dataSources,
     slotId,
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
   return values?.type === "variable" ? values.value.value : undefined;
 };
 
-test("independently inserted Custom Slots get their own Fragment", () => {
+test("independently inserted Builder components get their own Fragment", () => {
   const data = createData();
   const createId = createIdFactory();
-  const first = insertCustomSlot(data, createId);
-  const second = insertCustomSlot(data, createId);
+  const first = insertBuilderComponent(data, createId);
+  const second = insertBuilderComponent(data, createId);
 
-  const firstRoot = getCustomSlotContentRootId(data.instances, first);
-  const secondRoot = getCustomSlotContentRootId(data.instances, second);
+  const firstRoot = getBuilderComponentContentRootId(data.instances, first);
+  const secondRoot = getBuilderComponentContentRootId(data.instances, second);
   expect(firstRoot).toBeDefined();
   expect(secondRoot).toBeDefined();
   expect(firstRoot).not.toEqual(secondRoot);
 });
 
-test("duplicated Custom Slot shares structure and keeps its own heading", () => {
+test("duplicated Builder component shares structure and keeps its own heading", () => {
   const data = createData();
   const createId = createIdFactory();
-  const first = insertCustomSlot(data, createId);
+  const first = insertBuilderComponent(data, createId);
   const second = duplicateInstanceAfterItselfMutable({
     data,
     sourceInstanceId: first,
@@ -120,16 +120,24 @@ test("duplicated Custom Slot shares structure and keeps its own heading", () => 
     return;
   }
 
-  const rootId = getCustomSlotContentRootId(data.instances, first);
+  const rootId = getBuilderComponentContentRootId(data.instances, first);
   expect(rootId).toBeDefined();
-  expect(getCustomSlotContentRootId(data.instances, second)).toEqual(rootId);
+  expect(getBuilderComponentContentRootId(data.instances, second)).toEqual(
+    rootId
+  );
   // the duplicate owns separate local values
   expect(
-    findCustomSlotDataSource(data.dataSources, second, customSlotValuesVariable)
-      ?.id
+    findBuilderComponentDataSource(
+      data.dataSources,
+      second,
+      builderComponentValuesVariable
+    )?.id
   ).not.toEqual(
-    findCustomSlotDataSource(data.dataSources, first, customSlotValuesVariable)
-      ?.id
+    findBuilderComponentDataSource(
+      data.dataSources,
+      first,
+      builderComponentValuesVariable
+    )?.id
   );
 
   setLocalHeading(data, first, "heading-field", "First card");
@@ -147,8 +155,12 @@ test("duplicated Custom Slot shares structure and keeps its own heading", () => 
   root?.children.push({ type: "id", value: "description" });
 
   expect(data.instances.get(rootId ?? "")?.children).toHaveLength(1);
-  expect(getCustomSlotContentRootId(data.instances, first)).toEqual(rootId);
-  expect(getCustomSlotContentRootId(data.instances, second)).toEqual(rootId);
+  expect(getBuilderComponentContentRootId(data.instances, first)).toEqual(
+    rootId
+  );
+  expect(getBuilderComponentContentRootId(data.instances, second)).toEqual(
+    rootId
+  );
   expect(getLocalValues(data, first)).toEqual({
     "heading-field": { type: "literal", value: "First card" },
   });
@@ -157,11 +169,11 @@ test("duplicated Custom Slot shares structure and keeps its own heading", () => 
   });
 });
 
-test("drops into a Custom Slot target its shared Fragment", () => {
+test("drops into a Builder component target its shared Fragment", () => {
   const data = createData();
   const createId = createIdFactory();
-  const slotId = insertCustomSlot(data, createId);
-  const rootId = getCustomSlotContentRootId(data.instances, slotId);
+  const slotId = insertBuilderComponent(data, createId);
+  const rootId = getBuilderComponentContentRootId(data.instances, slotId);
   const instanceCount = data.instances.size;
 
   expect(
@@ -171,16 +183,16 @@ test("drops into a Custom Slot target its shared Fragment", () => {
       createId
     )
   ).toEqual({ parentSelector: [rootId, slotId, "body"], position: "end" });
-  // never creates or reuses a Fragment for a Custom Slot
+  // never creates or reuses a Fragment for a Builder component
   expect(data.instances.size).toEqual(instanceCount);
 });
 
-test("does not give a malformed Custom Slot another Fragment", () => {
+test("does not give a malformed Builder component another Fragment", () => {
   const data = createData();
   data.instances.set("broken", {
     type: "instance",
     id: "broken",
-    component: customSlotComponent,
+    component: builderComponent,
     children: [],
   });
   expect(
@@ -193,7 +205,7 @@ test("does not give a malformed Custom Slot another Fragment", () => {
   expect(data.instances.get("broken")?.children).toEqual([]);
 });
 
-test("inserts a Custom Slot through the component insert mutation", () => {
+test("inserts a Builder component through the component insert mutation", () => {
   const data = createData();
   const mutation = insertComponent(
     {
@@ -219,7 +231,7 @@ test("inserts a Custom Slot through the component insert mutation", () => {
         ]),
       },
     },
-    { parentInstanceId: "body", component: customSlotComponent },
+    { parentInstanceId: "body", component: builderComponent },
     { createId: createIdFactory() }
   );
   expect(mutation.result.rootInstanceIds).toHaveLength(1);
@@ -228,7 +240,7 @@ test("inserts a Custom Slot through the component insert mutation", () => {
 test("deleting one copy keeps the shared Fragment for the other copies", () => {
   const data = createData();
   const createId = createIdFactory();
-  const first = insertCustomSlot(data, createId);
+  const first = insertBuilderComponent(data, createId);
   const second = duplicateInstanceAfterItselfMutable({
     data,
     sourceInstanceId: first,
@@ -236,7 +248,7 @@ test("deleting one copy keeps the shared Fragment for the other copies", () => {
     projectId: "project",
     createId,
   });
-  const rootId = getCustomSlotContentRootId(data.instances, first);
+  const rootId = getBuilderComponentContentRootId(data.instances, first);
   const state = {
     ...data,
     pages: {
@@ -267,15 +279,15 @@ test("deleting one copy keeps the shared Fragment for the other copies", () => {
   expect(after.instances?.has(first)).toBe(false);
   expect(after.instances?.has(rootId ?? "")).toBe(true);
   expect(
-    getCustomSlotContentRootId(after.instances ?? new Map(), second ?? "")
+    getBuilderComponentContentRootId(after.instances ?? new Map(), second ?? "")
   ).toEqual(rootId);
 });
 
 test("deleting the last copy removes its shared Fragment and data", () => {
   const data = createData();
   const createId = createIdFactory();
-  const only = insertCustomSlot(data, createId);
-  const rootId = getCustomSlotContentRootId(data.instances, only) ?? "";
+  const only = insertBuilderComponent(data, createId);
+  const rootId = getBuilderComponentContentRootId(data.instances, only) ?? "";
   const state = {
     ...data,
     pages: {
@@ -313,15 +325,15 @@ test("deleting the last copy removes its shared Fragment and data", () => {
   ).toEqual([]);
 });
 
-test("a new Custom Slot starts empty with no properties", () => {
+test("a new Builder component starts empty with no properties", () => {
   const data = createData();
-  const slotId = insertCustomSlot(data, createIdFactory());
-  const rootId = getCustomSlotContentRootId(data.instances, slotId) ?? "";
+  const slotId = insertBuilderComponent(data, createIdFactory());
+  const rootId = getBuilderComponentContentRootId(data.instances, slotId) ?? "";
   expect(data.instances.get(rootId)?.children).toEqual([]);
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     data.dataSources,
     rootId,
-    "__customSlotSchema"
+    "__builderComponentSchema"
   );
   expect(schema?.type === "variable" && schema.value.value).toEqual([]);
 });

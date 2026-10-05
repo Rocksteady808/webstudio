@@ -33,9 +33,9 @@ import {
   getIndexesWithinAncestors,
   getContentBlockSource,
   elementComponent,
-  customSlotComponent,
-  getCustomSlotContentRootId,
-  getCustomSlotTag,
+  builderComponent,
+  getBuilderComponentContentRootId,
+  getBuilderComponentTag,
 } from "@webstudio-is/sdk";
 import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
 import {
@@ -352,27 +352,27 @@ DroppableComponentStub.displayName = "DroppableComponentStub";
 
 // renders a component copy as its chosen tag; without one the copy adds no
 // box, like a Slot, so the page keeps the structure it had
-const CustomSlotComponentStub = forwardRef<
+const BuilderComponentCopyStub = forwardRef<
   HTMLElement,
   { children?: ReactNode; [tagProperty]?: string }
 >(({ [tagProperty]: tag, ...props }, ref) => {
-  const customSlotTag = getCustomSlotTag(tag);
-  return customSlotTag === undefined
+  const builderComponentTag = getBuilderComponentTag(tag);
+  return builderComponentTag === undefined
     ? createElement("div", {
         ...props,
         ref,
         style: { display: "contents" },
       })
-    : createElement(customSlotTag, { ...props, ref });
+    : createElement(builderComponentTag, { ...props, ref });
 });
-CustomSlotComponentStub.displayName = "CustomSlotComponentStub";
+BuilderComponentCopyStub.displayName = "BuilderComponentCopyStub";
 
 const getRenderableChildren = (
   instance: Instance,
   instanceSelector: InstanceSelector,
   instances: Instances
 ) => {
-  const rootId = getCustomSlotContentRootId(instances, instance.id);
+  const rootId = getBuilderComponentContentRootId(instances, instance.id);
   const root = rootId === undefined ? undefined : instances.get(rootId);
   return root === undefined
     ? { children: instance.children, instanceSelector }
@@ -848,8 +848,8 @@ const WebstudioComponentCanvasInner = forwardRef<
     return <></>;
   }
 
-  if (instance.component === customSlotComponent) {
-    Component = CustomSlotComponentStub as AnyComponent;
+  if (instance.component === builderComponent) {
+    Component = BuilderComponentCopyStub as AnyComponent;
   }
 
   if (instance.component === blockComponent) {
@@ -1147,8 +1147,8 @@ const WebstudioComponentPreviewInner = forwardRef<
     Component = Block;
   }
 
-  if (instance.component === customSlotComponent) {
-    Component = CustomSlotComponentStub as AnyComponent;
+  if (instance.component === builderComponent) {
+    Component = BuilderComponentCopyStub as AnyComponent;
   }
 
   if (instance.component === blockBodyComponent) {

@@ -1,7 +1,7 @@
 import {
   type Asset,
   collectionComponent,
-  customSlotComponent,
+  builderComponent,
   dataSourceVariableValue,
   decodeDataVariableId,
   decodeDataSourceVariable,
@@ -600,7 +600,7 @@ const getParentInstanceById = (instances: Instances) => {
     // Slots and component copies start an isolated scope
     if (
       instance.component === "Slot" ||
-      instance.component === customSlotComponent
+      instance.component === builderComponent
     ) {
       continue;
     }

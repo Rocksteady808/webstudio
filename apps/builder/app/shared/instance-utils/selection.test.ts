@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { customSlotComponent, type Instances } from "@webstudio-is/sdk";
+import { builderComponent, type Instances } from "@webstudio-is/sdk";
 import {
   getCanvasClickSelector,
   getContextMenuSelectedInstanceSelectors,
@@ -39,10 +39,10 @@ describe("getCanvasClickSelector", () => {
     (
       [
         ["body", "Body"],
-        ["card", customSlotComponent],
+        ["card", builderComponent],
         ["card-fragment", "Fragment"],
         ["heading", "ws:element"],
-        ["button", customSlotComponent],
+        ["button", builderComponent],
         ["button-fragment", "Fragment"],
         ["label", "ws:element"],
       ] as const

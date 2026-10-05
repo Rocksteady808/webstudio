@@ -1,23 +1,24 @@
 import { z } from "zod";
 import {
-  customSlotComponent,
-  customSlotComponentVariable,
-  customSlotSchemaVariable,
-  customSlotValuesVariable,
-  customSlotOverridesVariable,
-  parseCustomSlotOverrides,
-  getCustomSlotCopy,
-  getCustomSlotEnclosingCopies,
+  builderComponent,
+  builderComponentParameterVariable,
+  builderComponentSchemaVariable,
+  builderComponentValuesVariable,
+  builderComponentOverridesVariable,
+  parseBuilderComponentOverrides,
+  getBuilderComponentCopy,
+  getBuilderComponentEnclosingCopies,
   encodeDataVariableId,
-  findCustomSlotDataSource,
+  findBuilderComponentDataSource,
   findTreeInstanceIds,
-  getCustomSlotContentRootId,
-  getCustomSlotVariantState,
-  parseCustomSlotFieldValues,
-  parseCustomSlotFields,
-  type CustomSlotField,
-  type CustomSlotFieldValue,
-  type CustomSlotFieldValues,
+  getBuilderComponentContentRootId,
+  getBuilderComponentChoiceState,
+  splitBuilderComponentChoiceState,
+  parseBuilderComponentFieldValues,
+  parseBuilderComponentFields,
+  type BuilderComponentField,
+  type BuilderComponentFieldValue,
+  type BuilderComponentFieldValues,
   type DataSource,
   type Instance,
   type WebstudioData,
@@ -30,41 +31,41 @@ import { throwBuilderRuntimeError } from "./errors";
 import { createRuntimeMutation } from "./mutation";
 
 /**
- * Custom Slot properties work like Figma or Webflow component properties:
+ * Builder component properties work like Figma or Webflow component properties:
  * the property list is shared by every copy, elements inside the shared
  * Fragment connect to `component.<name>`, and each copy stores its own value.
  */
 
-export const customSlotFieldNamespaces = [
+export const builderComponentFieldNamespaces = [
   "instances",
   "props",
   "dataSources",
 ] as const;
 
-/** Changing properties also removes styles of deleted variants. */
-export const customSlotSchemaNamespaces = [
-  ...customSlotFieldNamespaces,
+/** Deleting a choice property also removes the styles of its values. */
+export const builderComponentSchemaNamespaces = [
+  ...builderComponentFieldNamespaces,
   "styles",
 ] as const;
 
-type CustomSlotFieldState = Pick<
+type BuilderComponentFieldState = Pick<
   BuilderState,
-  (typeof customSlotFieldNamespaces)[number]
+  (typeof builderComponentFieldNamespaces)[number]
 >;
 
-type CustomSlotFieldData = Pick<
+type BuilderComponentFieldData = Pick<
   WebstudioData,
-  (typeof customSlotFieldNamespaces)[number]
+  (typeof builderComponentFieldNamespaces)[number]
 >;
 
-type CustomSlotSchemaState = Pick<
+type BuilderComponentSchemaState = Pick<
   BuilderState,
-  (typeof customSlotSchemaNamespaces)[number]
+  (typeof builderComponentSchemaNamespaces)[number]
 >;
 
-type CustomSlotSchemaData = Pick<
+type BuilderComponentSchemaData = Pick<
   WebstudioData,
-  (typeof customSlotSchemaNamespaces)[number]
+  (typeof builderComponentSchemaNamespaces)[number]
 >;
 
 const fieldNameInput = z
@@ -89,6 +90,7 @@ const fieldValueInput = z.union([
 
 const fieldTypeInput = z.enum([
   "text",
+  "richText",
   "number",
   "link",
   "html",
@@ -96,26 +98,14 @@ const fieldTypeInput = z.enum([
   "image",
   "json",
   "choice",
-  "variant",
 ]);
 
 const choicesInput = z
   .array(z.string().min(1))
   .describe("Values of a choice property; each value is also its label");
 
-const variantOptionsInput = z
-  .array(
-    z.object({
-      id: z
-        .string()
-        .regex(/^[A-Za-z0-9_-]+$/, "Variant option id must be a plain id"),
-      name: z.string().min(1),
-    })
-  )
-  .describe("Choices of a variant property, e.g. Small and Large");
-
 /** Converts a label like "Button Link" into a bindable name "buttonLink". */
-export const toCustomSlotFieldName = (label: string) => {
+export const toBuilderComponentFieldName = (label: string) => {
   const words = label
     .trim()
     .split(/[^A-Za-z0-9]+/)
@@ -131,7 +121,7 @@ export const toCustomSlotFieldName = (label: string) => {
 };
 
 const getRequiredState = <
-  Namespace extends (typeof customSlotSchemaNamespaces)[number],
+  Namespace extends (typeof builderComponentSchemaNamespaces)[number],
 >(
   state: Partial<Pick<BuilderState, Namespace>>,
   namespaces: readonly Namespace[]
@@ -147,19 +137,19 @@ const getRequiredState = <
   return state as Pick<WebstudioData, Namespace>;
 };
 
-export const getCustomSlotSchemaDataSource = (
-  data: CustomSlotFieldData,
+export const getBuilderComponentSchemaDataSource = (
+  data: BuilderComponentFieldData,
   fragmentId: Instance["id"]
 ) => {
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     data.dataSources,
     fragmentId,
-    customSlotSchemaVariable
+    builderComponentSchemaVariable
   );
-  const component = findCustomSlotDataSource(
+  const component = findBuilderComponentDataSource(
     data.dataSources,
     fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   );
   if (
     data.instances.get(fragmentId)?.component !== "Fragment" ||
@@ -168,14 +158,14 @@ export const getCustomSlotSchemaDataSource = (
   ) {
     return throwBuilderRuntimeError(
       "NOT_FOUND",
-      "Custom Slot properties were not found"
+      "Builder component properties were not found"
     );
   }
   return { schema, component };
 };
 
-export const readCustomSlotFields = (schema: DataSource) =>
-  parseCustomSlotFields(
+export const readBuilderComponentFields = (schema: DataSource) =>
+  parseBuilderComponentFields(
     schema.type === "variable" && schema.value.type === "json"
       ? schema.value.value
       : undefined
@@ -183,7 +173,7 @@ export const readCustomSlotFields = (schema: DataSource) =>
 
 /** Defaults are fixed values; data and expressions belong to each copy. */
 const requireLiteralDefault = (
-  defaultValue: undefined | null | CustomSlotFieldValue
+  defaultValue: undefined | null | BuilderComponentFieldValue
 ) => {
   if (defaultValue?.type === "expression") {
     return throwBuilderRuntimeError(
@@ -198,7 +188,7 @@ const requireLiteralDefault = (
  * `component.<name>`, but sharing a name with a variable is confusing.
  */
 const getComponentVariableNames = (
-  data: CustomSlotFieldData,
+  data: BuilderComponentFieldData,
   fragmentId: Instance["id"]
 ) => {
   const instanceIds = findTreeInstanceIds(data.instances, fragmentId);
@@ -208,7 +198,7 @@ const getComponentVariableNames = (
       dataSource.scopeInstanceId !== undefined &&
       instanceIds.has(dataSource.scopeInstanceId) &&
       dataSource.type !== "parameter" &&
-      isCustomSlotInternalVariable(dataSource) === false
+      isBuilderComponentInternalVariable(dataSource) === false
     ) {
       names.add(dataSource.name);
     }
@@ -216,10 +206,10 @@ const getComponentVariableNames = (
   return names;
 };
 
-export const requireUniqueCustomSlotFieldName = (
-  data: CustomSlotFieldData,
+export const requireUniqueBuilderComponentFieldName = (
+  data: BuilderComponentFieldData,
   fragmentId: Instance["id"],
-  fields: readonly CustomSlotField[],
+  fields: readonly BuilderComponentField[],
   name: string
 ) => {
   if (fields.some((field) => field.name === name)) {
@@ -238,8 +228,8 @@ export const requireUniqueCustomSlotFieldName = (
 
 /** HTML Embed values get the same check as an HTML Embed's Code. */
 const requireValidFieldValue = (
-  field: undefined | CustomSlotField,
-  value: undefined | null | CustomSlotFieldValue
+  field: undefined | BuilderComponentField,
+  value: undefined | null | BuilderComponentFieldValue
 ) => {
   if (
     field?.type !== "html" ||
@@ -254,10 +244,10 @@ const requireValidFieldValue = (
   }
 };
 
-export const writeCustomSlotFields = (
-  data: CustomSlotFieldData,
+export const writeBuilderComponentFields = (
+  data: BuilderComponentFieldData,
   schema: DataSource,
-  fields: CustomSlotField[]
+  fields: BuilderComponentField[]
 ) => {
   if (schema.type !== "variable") {
     return;
@@ -268,7 +258,7 @@ export const writeCustomSlotFields = (
   });
 };
 
-export const getCustomSlotFieldReference = (
+export const getBuilderComponentFieldReference = (
   componentId: DataSource["id"],
   name: string
 ) => `${encodeDataVariableId(componentId)}.${name}`;
@@ -276,15 +266,16 @@ export const getCustomSlotFieldReference = (
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export const listCustomSlotOccurrenceIds = (
-  data: CustomSlotFieldData,
+export const listBuilderComponentOccurrenceIds = (
+  data: BuilderComponentFieldData,
   fragmentId: Instance["id"]
 ) => {
   const ids: Instance["id"][] = [];
   for (const instance of data.instances.values()) {
     if (
-      instance.component === customSlotComponent &&
-      getCustomSlotContentRootId(data.instances, instance.id) === fragmentId
+      instance.component === builderComponent &&
+      getBuilderComponentContentRootId(data.instances, instance.id) ===
+        fragmentId
     ) {
       ids.push(instance.id);
     }
@@ -293,95 +284,25 @@ export const listCustomSlotOccurrenceIds = (
 };
 
 /**
- * Removes values copies of this component store for a property, in their own
- * values and in overrides their parent copies set for them.
+ * Deletes the styles conditioned on values of a deleted choice property, so
+ * no styles stay behind for a property no copy can use any more.
  */
-const removeCopyValuesMutable = (
-  data: CustomSlotFieldData,
-  fragmentId: Instance["id"],
-  fieldId: string,
-  shouldRemove: (value: CustomSlotFieldValue) => boolean = () => true
+const removeChoiceStylesMutable = (
+  data: BuilderComponentSchemaData,
+  fieldId: string
 ) => {
-  const copyIds = new Set(listCustomSlotOccurrenceIds(data, fragmentId));
-  for (const dataSource of data.dataSources.values()) {
-    if (dataSource.type !== "variable" || dataSource.value.type !== "json") {
-      continue;
-    }
-    if (
-      dataSource.name === customSlotValuesVariable &&
-      copyIds.has(dataSource.scopeInstanceId ?? "")
-    ) {
-      const values = parseCustomSlotFieldValues(dataSource.value.value);
-      const value = values[fieldId];
-      if (value === undefined || shouldRemove(value) === false) {
-        continue;
-      }
-      delete values[fieldId];
-      data.dataSources.set(dataSource.id, {
-        ...dataSource,
-        value: { type: "json", value: values },
-      });
-    }
-    if (dataSource.name === customSlotOverridesVariable) {
-      const overrides = parseCustomSlotOverrides(dataSource.value.value);
-      let changed = false;
-      for (const [key, values] of Object.entries(overrides)) {
-        const value = values[fieldId];
-        // override keys end with the nested copy they belong to
-        if (
-          value === undefined ||
-          copyIds.has(key.split("/").at(-1) ?? "") === false ||
-          shouldRemove(value) === false
-        ) {
-          continue;
-        }
-        delete values[fieldId];
-        if (Object.keys(values).length === 0) {
-          delete overrides[key];
-        }
-        changed = true;
-      }
-      if (changed) {
-        data.dataSources.set(dataSource.id, {
-          ...dataSource,
-          value: { type: "json", value: overrides },
-        });
-      }
-    }
-  }
-};
-
-/** Deletes the styles of variant options that no longer exist. */
-const removeVariantOptionsMutable = (
-  data: CustomSlotSchemaData,
-  fragmentId: Instance["id"],
-  field: CustomSlotField,
-  removedOptionIds: Set<string>
-) => {
-  if (removedOptionIds.size === 0) {
-    return;
-  }
-  const states = new Set(
-    Array.from(removedOptionIds, (id) => getCustomSlotVariantState(id))
-  );
   for (const [key, styleDecl] of data.styles) {
-    if (styleDecl.state !== undefined && states.has(styleDecl.state)) {
+    if (
+      splitBuilderComponentChoiceState(styleDecl.state)?.fieldId === fieldId
+    ) {
       data.styles.delete(key);
     }
   }
-  // copies using a deleted variant go back to the base design
-  removeCopyValuesMutable(
-    data,
-    fragmentId,
-    field.id,
-    (value) =>
-      value.type === "literal" && removedOptionIds.has(String(value.value))
-  );
 };
 
 /** Visits every expression used by the shared Fragment content. */
 const updateFragmentExpressionsMutable = (
-  data: CustomSlotFieldData,
+  data: BuilderComponentFieldData,
   fragmentId: Instance["id"],
   update: { expression: (expression: string) => string }
 ) => {
@@ -419,7 +340,7 @@ const updateFragmentExpressionsMutable = (
     }
   }
   // nested copies inside the component may fill their values from it
-  const updateValues = (values: CustomSlotFieldValues) => {
+  const updateValues = (values: BuilderComponentFieldValues) => {
     let changed = false;
     for (const [id, value] of Object.entries(values)) {
       if (value.type === "expression") {
@@ -440,8 +361,8 @@ const updateFragmentExpressionsMutable = (
     ) {
       continue;
     }
-    if (dataSource.name === customSlotValuesVariable) {
-      const values = parseCustomSlotFieldValues(dataSource.value.value);
+    if (dataSource.name === builderComponentValuesVariable) {
+      const values = parseBuilderComponentFieldValues(dataSource.value.value);
       if (updateValues(values)) {
         data.dataSources.set(dataSource.id, {
           ...dataSource,
@@ -449,8 +370,8 @@ const updateFragmentExpressionsMutable = (
         });
       }
     }
-    if (dataSource.name === customSlotOverridesVariable) {
-      const overrides = parseCustomSlotOverrides(dataSource.value.value);
+    if (dataSource.name === builderComponentOverridesVariable) {
+      const overrides = parseBuilderComponentOverrides(dataSource.value.value);
       let changed = false;
       for (const values of Object.values(overrides)) {
         changed = updateValues(values) || changed;
@@ -465,7 +386,7 @@ const updateFragmentExpressionsMutable = (
   }
 };
 
-export const createCustomSlotFieldInput = z.object({
+export const createBuilderComponentFieldInput = z.object({
   fragmentId: z.string().min(1),
   fieldId: z
     .string()
@@ -474,79 +395,62 @@ export const createCustomSlotFieldInput = z.object({
     .describe("Id for the new property, so later steps can refer to it"),
   name: fieldNameInput,
   type: fieldTypeInput.optional(),
-  options: variantOptionsInput.optional(),
-  baseName: z
-    .string()
-    .optional()
-    .describe("Name of the design without a variant; empty resets to Base"),
   choices: choicesInput.optional(),
   defaultValue: fieldValueInput
     .optional()
     .describe("Fixed default value. A property without a default is required"),
 });
 
-export const createCustomSlotField = (
-  state: CustomSlotFieldState,
-  input: z.infer<typeof createCustomSlotFieldInput>,
+export const createBuilderComponentField = (
+  state: BuilderComponentFieldState,
+  input: z.infer<typeof createBuilderComponentFieldInput>,
   context: BuilderRuntimeContext
 ) => {
-  const before = getRequiredState(state, customSlotFieldNamespaces);
+  const before = getRequiredState(state, builderComponentFieldNamespaces);
   const fieldId = input.fieldId ?? context.createId();
   let componentId = "";
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getCustomSlotSchemaDataSource(
+    const { schema, component } = getBuilderComponentSchemaDataSource(
       draft,
       input.fragmentId
     );
     componentId = component.id;
-    const fields = readCustomSlotFields(schema);
-    requireUniqueCustomSlotFieldName(
+    const fields = readBuilderComponentFields(schema);
+    requireUniqueBuilderComponentFieldName(
       draft,
       input.fragmentId,
       fields,
       input.name
     );
-    requireLiteralDefault(input.defaultValue as CustomSlotFieldValue);
-    const field: CustomSlotField = { id: fieldId, name: input.name };
+    requireLiteralDefault(input.defaultValue as BuilderComponentFieldValue);
+    const field: BuilderComponentField = { id: fieldId, name: input.name };
     if (input.type !== undefined) {
       field.type = input.type;
-    }
-    if (input.type === "variant") {
-      field.options = input.options ?? [];
-      const baseName = input.baseName?.trim();
-      if (baseName !== undefined && baseName.length > 0) {
-        field.baseName = baseName;
-      }
     }
     if (input.type === "choice") {
       field.choices = input.choices ?? [];
     }
     if (input.defaultValue !== undefined) {
-      field.defaultValue = input.defaultValue as CustomSlotFieldValue;
+      field.defaultValue = input.defaultValue as BuilderComponentFieldValue;
     }
     requireValidFieldValue(field, field.defaultValue);
-    writeCustomSlotFields(draft, schema, [...fields, field]);
+    writeBuilderComponentFields(draft, schema, [...fields, field]);
   });
   return createRuntimeMutation({
     payload,
     result: {
       fieldId,
-      expression: getCustomSlotFieldReference(componentId, input.name),
+      expression: getBuilderComponentFieldReference(componentId, input.name),
     },
-    invalidatesNamespaces: customSlotFieldNamespaces,
+    invalidatesNamespaces: builderComponentFieldNamespaces,
   });
 };
 
-export const updateCustomSlotFieldInput = z.object({
+export const updateBuilderComponentFieldInput = z.object({
   fragmentId: z.string().min(1),
   fieldId: z.string().min(1),
   name: fieldNameInput.optional(),
   type: fieldTypeInput.optional(),
-  options: variantOptionsInput.optional(),
-  baseName: z
-    .string()
-    .optional()
-    .describe("Name of the design without a variant; empty resets to Base"),
   choices: choicesInput.optional(),
   defaultValue: fieldValueInput
     .nullable()
@@ -554,25 +458,25 @@ export const updateCustomSlotFieldInput = z.object({
     .describe("Fixed default value; null removes it and makes it required"),
 });
 
-export const updateCustomSlotField = (
-  state: CustomSlotSchemaState,
-  input: z.infer<typeof updateCustomSlotFieldInput>
+export const updateBuilderComponentField = (
+  state: BuilderComponentSchemaState,
+  input: z.infer<typeof updateBuilderComponentFieldInput>
 ) => {
-  const before = getRequiredState(state, customSlotSchemaNamespaces);
+  const before = getRequiredState(state, builderComponentSchemaNamespaces);
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema, component } = getCustomSlotSchemaDataSource(
+    const { schema, component } = getBuilderComponentSchemaDataSource(
       draft,
       input.fragmentId
     );
-    const fields = readCustomSlotFields(schema);
+    const fields = readBuilderComponentFields(schema);
     const field = fields.find((field) => field.id === input.fieldId);
     if (field === undefined) {
       return throwBuilderRuntimeError("NOT_FOUND", "Property not found");
     }
-    const nextField: CustomSlotField = { ...field };
-    requireLiteralDefault(input.defaultValue as CustomSlotFieldValue);
+    const nextField: BuilderComponentField = { ...field };
+    requireLiteralDefault(input.defaultValue as BuilderComponentFieldValue);
     if (input.name !== undefined && input.name !== field.name) {
-      requireUniqueCustomSlotFieldName(
+      requireUniqueBuilderComponentFieldName(
         draft,
         input.fragmentId,
         fields,
@@ -582,11 +486,14 @@ export const updateCustomSlotField = (
       // keep connected settings working after rename
       const pattern = new RegExp(
         `${escapeRegExp(
-          getCustomSlotFieldReference(component.id, field.name)
+          getBuilderComponentFieldReference(component.id, field.name)
         )}(?![\\w$])`,
         "g"
       );
-      const replacement = getCustomSlotFieldReference(component.id, input.name);
+      const replacement = getBuilderComponentFieldReference(
+        component.id,
+        input.name
+      );
       updateFragmentExpressionsMutable(draft, input.fragmentId, {
         expression: (expression) => expression.replace(pattern, replacement),
       });
@@ -602,35 +509,13 @@ export const updateCustomSlotField = (
     if (input.choices !== undefined) {
       nextField.choices = input.choices;
     }
-    if (input.options !== undefined) {
-      nextField.options = input.options;
-      const keptIds = new Set(input.options.map((option) => option.id));
-      removeVariantOptionsMutable(
-        draft,
-        input.fragmentId,
-        field,
-        new Set(
-          (field.options ?? [])
-            .map((option) => option.id)
-            .filter((id) => keptIds.has(id) === false)
-        )
-      );
-    }
-    if (input.baseName !== undefined) {
-      const baseName = input.baseName.trim();
-      if (baseName.length > 0) {
-        nextField.baseName = baseName;
-      } else {
-        delete nextField.baseName;
-      }
-    }
     if (input.defaultValue === null) {
       delete nextField.defaultValue;
     } else if (input.defaultValue !== undefined) {
-      nextField.defaultValue = input.defaultValue as CustomSlotFieldValue;
+      nextField.defaultValue = input.defaultValue as BuilderComponentFieldValue;
     }
     requireValidFieldValue(nextField, nextField.defaultValue);
-    writeCustomSlotFields(
+    writeBuilderComponentFields(
       draft,
       schema,
       fields.map((item) => (item.id === field.id ? nextField : item))
@@ -639,41 +524,37 @@ export const updateCustomSlotField = (
   return createRuntimeMutation({
     payload,
     result: { fieldId: input.fieldId },
-    invalidatesNamespaces: customSlotSchemaNamespaces,
+    invalidatesNamespaces: builderComponentSchemaNamespaces,
   });
 };
 
-export const deleteCustomSlotFieldInput = z.object({
+export const deleteBuilderComponentFieldInput = z.object({
   fragmentId: z.string().min(1),
   fieldId: z.string().min(1),
 });
 
-export const deleteCustomSlotField = (
-  state: CustomSlotSchemaState,
-  input: z.infer<typeof deleteCustomSlotFieldInput>
+export const deleteBuilderComponentField = (
+  state: BuilderComponentSchemaState,
+  input: z.infer<typeof deleteBuilderComponentFieldInput>
 ) => {
-  const before = getRequiredState(state, customSlotSchemaNamespaces);
+  const before = getRequiredState(state, builderComponentSchemaNamespaces);
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    const { schema } = getCustomSlotSchemaDataSource(draft, input.fragmentId);
-    const fields = readCustomSlotFields(schema);
+    const { schema } = getBuilderComponentSchemaDataSource(
+      draft,
+      input.fragmentId
+    );
+    const fields = readBuilderComponentFields(schema);
     const field = fields.find((field) => field.id === input.fieldId);
     if (field === undefined) {
       return throwBuilderRuntimeError("NOT_FOUND", "Property not found");
     }
-    writeCustomSlotFields(
+    writeBuilderComponentFields(
       draft,
       schema,
       fields.filter((item) => item.id !== field.id)
     );
-    if (field.type === "variant") {
-      // variant styles and picks have no use without the variant
-      removeVariantOptionsMutable(
-        draft,
-        input.fragmentId,
-        field,
-        new Set((field.options ?? []).map((option) => option.id))
-      );
-      removeCopyValuesMutable(draft, input.fragmentId, field.id);
+    if (field.type === "choice") {
+      removeChoiceStylesMutable(draft, field.id);
     }
     // copies keep their values and connected settings keep pointing at the
     // property, showing an error until they are connected to another one
@@ -681,11 +562,11 @@ export const deleteCustomSlotField = (
   return createRuntimeMutation({
     payload,
     result: { fieldId: input.fieldId },
-    invalidatesNamespaces: customSlotSchemaNamespaces,
+    invalidatesNamespaces: builderComponentSchemaNamespaces,
   });
 };
 
-export const setCustomSlotFieldValueInput = z.object({
+export const setBuilderComponentFieldValueInput = z.object({
   slotId: z.string().min(1),
   fieldId: z.string().min(1),
   // null resets this copy to the property default
@@ -698,47 +579,50 @@ export const setCustomSlotFieldValueInput = z.object({
     ),
 });
 
-export const setCustomSlotFieldValue = (
-  state: CustomSlotFieldState,
-  input: z.infer<typeof setCustomSlotFieldValueInput>,
+export const setBuilderComponentFieldValue = (
+  state: BuilderComponentFieldState,
+  input: z.infer<typeof setBuilderComponentFieldValueInput>,
   context: BuilderRuntimeContext
 ) => {
-  const before = getRequiredState(state, customSlotFieldNamespaces);
+  const before = getRequiredState(state, builderComponentFieldNamespaces);
   const { payload } = produceWebstudioDataMutation(before, (draft) => {
-    if (draft.instances.get(input.slotId)?.component !== customSlotComponent) {
-      return throwBuilderRuntimeError("NOT_FOUND", "Custom Slot not found");
+    if (draft.instances.get(input.slotId)?.component !== builderComponent) {
+      return throwBuilderRuntimeError(
+        "NOT_FOUND",
+        "Builder component not found"
+      );
     }
-    const fragmentId = getCustomSlotContentRootId(
+    const fragmentId = getBuilderComponentContentRootId(
       draft.instances,
       input.slotId
     );
     const schema =
       fragmentId === undefined
         ? undefined
-        : findCustomSlotDataSource(
+        : findBuilderComponentDataSource(
             draft.dataSources,
             fragmentId,
-            customSlotSchemaVariable
+            builderComponentSchemaVariable
           );
     requireValidFieldValue(
       schema === undefined
         ? undefined
-        : readCustomSlotFields(schema).find(
+        : readBuilderComponentFields(schema).find(
             (field) => field.id === input.fieldId
           ),
-      input.value as null | CustomSlotFieldValue
+      input.value as null | BuilderComponentFieldValue
     );
     if (input.override !== undefined) {
       const { ownerSlotId, key } = input.override;
-      if (draft.instances.get(ownerSlotId)?.component !== customSlotComponent) {
+      if (draft.instances.get(ownerSlotId)?.component !== builderComponent) {
         return throwBuilderRuntimeError("NOT_FOUND", "Parent copy not found");
       }
-      const existing = findCustomSlotDataSource(
+      const existing = findBuilderComponentDataSource(
         draft.dataSources,
         ownerSlotId,
-        customSlotOverridesVariable
+        builderComponentOverridesVariable
       );
-      const overrides = parseCustomSlotOverrides(
+      const overrides = parseBuilderComponentOverrides(
         existing?.type === "variable" && existing.value.type === "json"
           ? existing.value.value
           : undefined
@@ -747,7 +631,7 @@ export const setCustomSlotFieldValue = (
       if (input.value === null) {
         delete nested[input.fieldId];
       } else {
-        nested[input.fieldId] = input.value as CustomSlotFieldValue;
+        nested[input.fieldId] = input.value as BuilderComponentFieldValue;
       }
       if (Object.keys(nested).length === 0) {
         delete overrides[key];
@@ -759,17 +643,17 @@ export const setCustomSlotFieldValue = (
         type: "variable",
         id,
         scopeInstanceId: ownerSlotId,
-        name: customSlotOverridesVariable,
+        name: builderComponentOverridesVariable,
         value: { type: "json", value: overrides },
       });
       return;
     }
-    const values = findCustomSlotDataSource(
+    const values = findBuilderComponentDataSource(
       draft.dataSources,
       input.slotId,
-      customSlotValuesVariable
+      builderComponentValuesVariable
     );
-    const localValues = parseCustomSlotFieldValues(
+    const localValues = parseBuilderComponentFieldValues(
       values?.type === "variable" && values.value.type === "json"
         ? values.value.value
         : undefined
@@ -777,61 +661,64 @@ export const setCustomSlotFieldValue = (
     if (input.value === null) {
       delete localValues[input.fieldId];
     } else {
-      localValues[input.fieldId] = input.value as CustomSlotFieldValue;
+      localValues[input.fieldId] = input.value as BuilderComponentFieldValue;
     }
     const id = values?.id ?? context.createId();
     draft.dataSources.set(id, {
       type: "variable",
       id,
       scopeInstanceId: input.slotId,
-      name: customSlotValuesVariable,
+      name: builderComponentValuesVariable,
       value: { type: "json", value: localValues },
     });
   });
   return createRuntimeMutation({
     payload,
     result: { slotId: input.slotId, fieldId: input.fieldId },
-    invalidatesNamespaces: customSlotFieldNamespaces,
+    invalidatesNamespaces: builderComponentFieldNamespaces,
   });
 };
 
-export type CustomSlotProperty = {
-  field: CustomSlotField;
+export type BuilderComponentProperty = {
+  field: BuilderComponentField;
   /** this copy's own value, undefined when it uses the default */
-  localValue?: CustomSlotFieldValue;
+  localValue?: BuilderComponentFieldValue;
 };
 
-/** Reads the properties shown when a Custom Slot copy is selected. */
-export const getCustomSlotProperties = ({
+/** Reads the properties shown when a Builder component copy is selected. */
+export const getBuilderComponentProperties = ({
   instances,
   dataSources,
   slotId,
 }: Pick<WebstudioData, "instances" | "dataSources"> & {
   slotId: Instance["id"];
 }) => {
-  const fragmentId = getCustomSlotContentRootId(instances, slotId);
+  const fragmentId = getBuilderComponentContentRootId(instances, slotId);
   if (fragmentId === undefined) {
     return;
   }
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     dataSources,
     fragmentId,
-    customSlotSchemaVariable
+    builderComponentSchemaVariable
   );
-  const values = findCustomSlotDataSource(
+  const values = findBuilderComponentDataSource(
     dataSources,
     slotId,
-    customSlotValuesVariable
+    builderComponentValuesVariable
   );
-  const localValues = parseCustomSlotFieldValues(
+  const localValues = parseBuilderComponentFieldValues(
     values?.type === "variable" && values.value.type === "json"
       ? values.value.value
       : undefined
   );
   return {
     fragmentId,
-    properties: (schema === undefined ? [] : readCustomSlotFields(schema)).map(
-      (field): CustomSlotProperty => ({
+    properties: (schema === undefined
+      ? []
+      : readBuilderComponentFields(schema)
+    ).map(
+      (field): BuilderComponentProperty => ({
         field,
         localValue: localValues[field.id],
       })
@@ -840,10 +727,10 @@ export const getCustomSlotProperties = ({
 };
 
 /**
- * Finds the Custom Slot whose properties an element can connect to, from the
+ * Finds the Builder component whose properties an element can connect to, from the
  * data source ids available in the element's binding scope.
  */
-export const findCustomSlotConnection = ({
+export const findBuilderComponentConnection = ({
   dataSources,
   availableDataSourceIds,
   excludeFragmentId,
@@ -860,39 +747,34 @@ export const findCustomSlotConnection = ({
     const component = dataSources.get(id);
     if (
       component?.type !== "parameter" ||
-      component.name !== customSlotComponentVariable ||
+      component.name !== builderComponentParameterVariable ||
       component.scopeInstanceId === undefined ||
       component.scopeInstanceId === excludeFragmentId
     ) {
       continue;
     }
-    const schema = findCustomSlotDataSource(
+    const schema = findBuilderComponentDataSource(
       dataSources,
       component.scopeInstanceId,
-      customSlotSchemaVariable
+      builderComponentSchemaVariable
     );
     if (schema === undefined) {
       continue;
     }
     return {
       fragmentId: component.scopeInstanceId,
-      fields: readCustomSlotFields(schema),
+      fields: readBuilderComponentFields(schema),
       getExpression: (name: string) =>
-        getCustomSlotFieldReference(component.id, name),
+        getBuilderComponentFieldReference(component.id, name),
     };
   }
 };
 
-/** Internal Custom Slot storage that should not appear as user variables. */
-export const isCustomSlotInternalVariable = (dataSource: DataSource) =>
-  dataSource.name === customSlotSchemaVariable ||
-  dataSource.name === customSlotValuesVariable ||
-  dataSource.name === customSlotOverridesVariable;
-
-const toPropertyLabel = (name: string) =>
-  name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/^./, (letter) => letter.toUpperCase());
+/** Internal Builder component storage that should not appear as user variables. */
+export const isBuilderComponentInternalVariable = (dataSource: DataSource) =>
+  dataSource.name === builderComponentSchemaVariable ||
+  dataSource.name === builderComponentValuesVariable ||
+  dataSource.name === builderComponentOverridesVariable;
 
 /**
  * The closest copy an element is shown inside. Selectors go from the element
@@ -907,7 +789,7 @@ const findEnclosingCopy = (
     const slotId = instanceSelector[index + 1];
     if (
       instances.get(fragmentId)?.component === "Fragment" &&
-      instances.get(slotId)?.component === customSlotComponent
+      instances.get(slotId)?.component === builderComponent
     ) {
       return {
         fragmentId,
@@ -919,10 +801,11 @@ const findEnclosingCopy = (
 };
 
 /**
- * Style states an element offers for the variants of the component it is
- * inside, e.g. "Size: Small", so variant styles use the native Style panel.
+ * Conditions an element offers for the choice properties of the component
+ * it is inside, shown as `size: large`, so a value can be styled in the
+ * native Style panel. Styling a value is how variants are made.
  */
-export const getCustomSlotVariantStates = ({
+export const getBuilderComponentChoiceStates = ({
   instances,
   dataSources,
   instanceSelector,
@@ -933,28 +816,30 @@ export const getCustomSlotVariantStates = ({
   if (copy === undefined) {
     return [];
   }
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     dataSources,
     copy.fragmentId,
-    customSlotSchemaVariable
+    builderComponentSchemaVariable
   );
-  return (schema === undefined ? [] : readCustomSlotFields(schema)).flatMap(
-    (field) =>
-      field.type === "variant"
-        ? (field.options ?? []).map((option) => ({
-            label: `${toPropertyLabel(field.name)}: ${option.name}`,
-            selector: getCustomSlotVariantState(option.id),
-          }))
-        : []
+  return (
+    schema === undefined ? [] : readBuilderComponentFields(schema)
+  ).flatMap((field) =>
+    field.type === "choice"
+      ? (field.choices ?? []).map((choice) => ({
+          label: `${field.name}: ${choice}`,
+          selector: getBuilderComponentChoiceState(field.id, choice),
+        }))
+      : []
   );
 };
 
 /**
- * The variant style state to edit for an element inside a copy, so styling
- * an element in a copy set to Small edits Small, like Webflow and Figma.
- * Undefined when the copy uses the base design.
+ * The condition to edit for an element inside a copy, so styling inside a
+ * copy set to `size: large` edits large, like Webflow variants. Undefined
+ * when the copy uses the default of every choice, which edits the base
+ * styles every value starts from.
  */
-export const getCustomSlotActiveVariantState = ({
+export const getBuilderComponentActiveChoiceState = ({
   instances,
   dataSources,
   instanceSelector,
@@ -965,28 +850,32 @@ export const getCustomSlotActiveVariantState = ({
   if (enclosing === undefined) {
     return;
   }
-  // a nested copy uses the variant its parent copy picked for it
-  const copy = getCustomSlotCopy({
+  // a nested copy uses the values its parent copy picked for it
+  const copy = getBuilderComponentCopy({
     instances,
     dataSources,
     slotId: enclosing.slotId,
-    enclosingCopyIds: getCustomSlotEnclosingCopies(
+    enclosingCopyIds: getBuilderComponentEnclosingCopies(
       instances,
       enclosing.copySelector
     ),
   });
   for (const field of copy?.fields ?? []) {
-    const value = copy?.values[field.id] ?? field.defaultValue;
-    const option = field.options?.find(
-      (option) => value?.type === "literal" && option.id === value.value
-    );
-    if (field.type === "variant" && option !== undefined) {
-      return getCustomSlotVariantState(option.id);
+    const value = copy?.values[field.id];
+    if (
+      field.type === "choice" &&
+      value?.type === "literal" &&
+      typeof value.value === "string" &&
+      field.choices?.includes(value.value) &&
+      (field.defaultValue?.type !== "literal" ||
+        field.defaultValue.value !== value.value)
+    ) {
+      return getBuilderComponentChoiceState(field.id, value.value);
     }
   }
 };
 
-export type BrokenCustomSlotReference = {
+export type BrokenBuilderComponentReference = {
   instanceId: Instance["id"];
   /** setting name, or undefined for text content */
   propName?: string;
@@ -999,35 +888,35 @@ export type BrokenCustomSlotReference = {
  * or renamed elsewhere. They stay visible as errors until connected to
  * another property or removed.
  */
-export const findBrokenCustomSlotReferences = ({
+export const findBrokenBuilderComponentReferences = ({
   instances,
   props,
   dataSources,
   fragmentId,
 }: Pick<WebstudioData, "instances" | "props" | "dataSources"> & {
   fragmentId: Instance["id"];
-}): BrokenCustomSlotReference[] => {
-  const component = findCustomSlotDataSource(
+}): BrokenBuilderComponentReference[] => {
+  const component = findBuilderComponentDataSource(
     dataSources,
     fragmentId,
-    customSlotComponentVariable
+    builderComponentParameterVariable
   );
-  const schema = findCustomSlotDataSource(
+  const schema = findBuilderComponentDataSource(
     dataSources,
     fragmentId,
-    customSlotSchemaVariable
+    builderComponentSchemaVariable
   );
   if (component === undefined || schema === undefined) {
     return [];
   }
   const names = new Set(
-    readCustomSlotFields(schema).map((field) => field.name)
+    readBuilderComponentFields(schema).map((field) => field.name)
   );
   const pattern = new RegExp(
     `${escapeRegExp(encodeDataVariableId(component.id))}\\.([A-Za-z_$][\\w$]*)`,
     "g"
   );
-  const broken: BrokenCustomSlotReference[] = [];
+  const broken: BrokenBuilderComponentReference[] = [];
   const check = (
     expression: string,
     instanceId: Instance["id"],

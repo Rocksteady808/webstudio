@@ -165,11 +165,14 @@ const getSelectorDescription = (selector: string | null | undefined) => {
   return <Box css={{ maxWidth: theme.spacing[26] }}>{description}</Box>;
 };
 
-const SelectorCombobox = ({
+export const SelectorCombobox = ({
   existingSelectors,
+  suggestions = [],
   onSelect,
 }: {
   existingSelectors: string[];
+  /** offered before every other selector, e.g. states of the element's tag */
+  suggestions?: string[];
   onSelect: (selector: string) => void;
 }) => {
   const [value, setValue] = useState("");
@@ -186,9 +189,9 @@ const SelectorCombobox = ({
     setValue("");
   };
 
-  const availableItems = allSelectors.filter((selector) =>
-    existingSelectors.every((s) => s !== selector)
-  );
+  const availableItems = Array.from(
+    new Set([...suggestions, ...allSelectors])
+  ).filter((selector) => existingSelectors.every((s) => s !== selector));
 
   return (
     <form

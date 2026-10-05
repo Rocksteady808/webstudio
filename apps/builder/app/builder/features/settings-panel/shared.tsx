@@ -17,7 +17,7 @@ import {
   standardAttributesToReactProps,
 } from "@webstudio-is/react-sdk";
 import {
-  isCustomSlotInternalVariable,
+  isBuilderComponentInternalVariable,
   showAttributeMeta,
 } from "@webstudio-is/project-build/runtime";
 import {
@@ -283,7 +283,7 @@ export const $selectedInstanceScope = computed(
         }
         if (
           dataSource === undefined ||
-          isCustomSlotInternalVariable(dataSource)
+          isBuilderComponentInternalVariable(dataSource)
         ) {
           continue;
         }
